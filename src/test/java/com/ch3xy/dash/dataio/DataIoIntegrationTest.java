@@ -2,12 +2,14 @@ package com.ch3xy.dash.dataio;
 
 import com.ch3xy.dash.AbstractIntegrationTest;
 import com.ch3xy.dash.project.BudgetReset;
+import com.ch3xy.dash.project.ProjectRateRequest;
 import com.ch3xy.dash.project.ProjectRequest;
 import com.ch3xy.dash.project.ProjectResponse;
 import com.ch3xy.dash.project.ProjectService;
 import com.ch3xy.dash.timeentry.RecentCombination;
 import com.ch3xy.dash.timeentry.TimeEntryFilter;
 import com.ch3xy.dash.timeentry.TimeEntryRequest;
+import com.ch3xy.dash.timeentry.TimeEntryResponse;
 import com.ch3xy.dash.timeentry.TimeEntryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +26,7 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired ClockifyImportService importService;
     @Autowired BackupService backupService;
+    @Autowired BackupRestoreService backupRestoreService;
     @Autowired ProjectService projectService;
     @Autowired TimeEntryService timeEntryService;
 
@@ -72,6 +75,38 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
         assertThat(backup.settings()).isNotNull();
         assertThat(backup.projects()).anyMatch(p -> p.id().equals(project.id()));
         assertThat(backup.timeEntries()).anyMatch(e -> e.projectId().equals(project.id()));
+    }
+
+    @Test
+    void restoreReplacesAllDataAndPreservesIdsAndSnapshots() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Restore Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        TimeEntryResponse entry = timeEntryService.create(new TimeEntryRequest(project.id(), null, "restore work",
+                Instant.parse("2026-08-01T08:00:00Z"), Instant.parse("2026-08-01T09:00:00Z"), true, Set.of()));
+        assertThat(entry.amountSnapshot()).isEqualByComparingTo("60.00"); // 1h * 60
+
+        BackupDocument backup = backupService.export();
+
+        // Mutate after the snapshot: a new project and a rate change that must NOT leak into the restore.
+        ProjectResponse extraProject = projectService.create(new ProjectRequest(
+                null, "Extra Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("999.00"), "EUR", null, null, BudgetReset.NONE));
+        projectService.addRate(project.id(), new ProjectRateRequest(
+                new BigDecimal("200.00"), "EUR", Instant.parse("2026-07-01T00:00:00Z"), null));
+
+        RestoreResult result = backupRestoreService.restore(backup);
+
+        assertThat(result.timeEntries()).isEqualTo(backup.timeEntries().size());
+
+        // The project created after the backup is wiped.
+        assertThat(projectService.findAll(true)).noneMatch(p -> p.id().equals(extraProject.id()));
+        // The original entry returns with the same id and the original amount snapshot.
+        TimeEntryResponse restored = timeEntryService.findById(entry.id());
+        assertThat(restored.amountSnapshot()).isEqualByComparingTo("60.00");
+        // The rate added after the backup must not survive the restore (snapshot/history stable).
+        assertThat(projectService.getRates(project.id()))
+                .noneMatch(r -> r.hourlyRate().compareTo(new BigDecimal("200.00")) == 0);
     }
 
     @Test

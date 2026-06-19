@@ -48,6 +48,15 @@ import { ToastService } from '../../core/toast.service';
       </div>
 
       <div class="card card-pad mt-4">
+        <div class="card-title">Wiederherstellen</div>
+        <p class="muted">
+          Backup-JSON hochladen. <strong>Achtung:</strong> ersetzt alle vorhandenen Daten
+          unwiderruflich.
+        </p>
+        <input type="file" accept="application/json,.json" (change)="onRestoreFile($event)" [disabled]="busy()" />
+      </div>
+
+      <div class="card card-pad mt-4">
         <div class="card-title">Clockify-Import</div>
         <p class="muted">Clockify-CSV-Export hochladen. Kunden, Projekte, Tasks und Tags werden automatisch angelegt.</p>
         <input type="file" accept=".csv,text/csv" (change)="onFile($event)" [disabled]="busy()" />
@@ -103,6 +112,43 @@ export class SettingsComponent {
       this.dataIo.importClockify(csv).subscribe({
         next: (res) => {
           this.toast.success(`Import: ${res.imported} importiert, ${res.skipped} übersprungen`);
+          this.busy.set(false);
+          input.value = '';
+        },
+        error: () => {
+          this.busy.set(false);
+          input.value = '';
+        },
+      });
+    });
+  }
+
+  onRestoreFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    if (!confirm('Alle vorhandenen Daten werden durch das Backup ersetzt. Fortfahren?')) {
+      input.value = '';
+      return;
+    }
+    this.busy.set(true);
+    file.text().then((text) => {
+      let doc: unknown;
+      try {
+        doc = JSON.parse(text);
+      } catch {
+        this.toast.error('Ungültige JSON-Datei.');
+        this.busy.set(false);
+        input.value = '';
+        return;
+      }
+      this.dataIo.restore(doc).subscribe({
+        next: (r) => {
+          this.toast.success(
+            `Wiederhergestellt: ${r.projects} Projekte, ${r.timeEntries} Einträge`,
+          );
           this.busy.set(false);
           input.value = '';
         },

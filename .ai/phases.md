@@ -225,10 +225,13 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 - [x] Dark/Light Mode vollständig (Theme-Toggle, persistiert, defensiver Storage-Zugriff)
 - [x] Inline-Editing der Beschreibung in der Timer-Liste (`AutofocusDirective`)
 
-### Backup-Restore
+### Backup-Restore ✅ 2026-06-20
 
-- [ ] JSON-Restore-Endpoint (`POST /api/v1/backup`) — bewusst zurückgestellt (FK-Reihenfolge,
-      Idempotenz, Wipe-Semantik riskant); Export deckt das Akzeptanzkriterium „Backup möglich" ab.
+- [x] JSON-Restore-Endpoint (`POST /api/v1/backup/restore`) — `BackupRestoreService`:
+      transaktionaler Wipe (FK-sichere Reihenfolge) + Re-Insert via JDBC unter Erhalt der
+      Original-IDs und Snapshots (Raten, Beträge, Ratenhistorie bleiben reproduzierbar;
+      Domain-create-Services würden Snapshots neu berechnen). Frontend: Upload mit Bestätigung
+      in den Einstellungen. Round-Trip-Test + Live verifiziert.
 
 ### Akzeptanzkriterien
 
