@@ -2,6 +2,7 @@ package com.ch3xy.dash.report;
 
 import com.ch3xy.dash.common.pagination.PageResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
+import com.ch3xy.dash.report.dto.HeatmapResponse;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
 import com.ch3xy.dash.report.dto.TrendReportResponse;
 import com.ch3xy.dash.report.dto.WeeklyReportResponse;
@@ -27,15 +28,21 @@ public class ReportController {
 
     private final ReportService service;
     private final CsvExportService csvExportService;
+    private final XlsxExportService xlsxExportService;
 
-    public ReportController(ReportService service, CsvExportService csvExportService) {
+    public ReportController(ReportService service,
+                            CsvExportService csvExportService,
+                            XlsxExportService xlsxExportService) {
         this.service = service;
         this.csvExportService = csvExportService;
+        this.xlsxExportService = xlsxExportService;
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<SummaryReportResponse> summary(FilterParams params) {
-        return ResponseEntity.ok(service.getSummary(params.toFilter()));
+    public ResponseEntity<SummaryReportResponse> summary(
+            FilterParams params,
+            @RequestParam(defaultValue = "false") boolean rounded) {
+        return ResponseEntity.ok(service.getSummary(params.toFilter(), rounded));
     }
 
     @GetMapping("/detailed")
@@ -56,8 +63,14 @@ public class ReportController {
     @GetMapping("/trends")
     public ResponseEntity<TrendReportResponse> trends(
             FilterParams params,
-            @RequestParam(required = false) GroupBy granularity) {
-        return ResponseEntity.ok(service.getTrends(params.toFilter(), granularity));
+            @RequestParam(required = false) GroupBy granularity,
+            @RequestParam(defaultValue = "false") boolean rounded) {
+        return ResponseEntity.ok(service.getTrends(params.toFilter(), granularity, rounded));
+    }
+
+    @GetMapping("/heatmap")
+    public ResponseEntity<HeatmapResponse> heatmap(@RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(service.getHeatmap(year));
     }
 
     @GetMapping("/weekly")
@@ -72,6 +85,16 @@ public class ReportController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"report.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(body);
+    }
+
+    @GetMapping("/export.xlsx")
+    public ResponseEntity<byte[]> exportXlsx(FilterParams params) {
+        byte[] body = xlsxExportService.export(params.toFilter());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"report.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(body);
     }
 

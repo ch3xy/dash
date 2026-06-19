@@ -172,31 +172,37 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 5 — Erweiterte Reports & Visualisierung
+## Phase 5 — Erweiterte Reports & Visualisierung ✅ 2026-06-19
 
 **Ziel:** Vollständiges Reporting-System.
 
 ### Backend
 
-- [ ] `GET /reports/heatmap`
-- [ ] Rounded vs Raw Duration via `?rounded=true`
-- [ ] `GET /reports/export.xlsx`
-- [ ] `GET /dashboard` — aggregierte Dashboard-Daten
+- [x] `GET /reports/heatmap?year=` (Dauer je Tag + Intensität, App-Zeitzone für Default-Jahr)
+- [x] Rounded vs Raw Duration via `?rounded=true` (Rundungsregel/-intervall aus Settings,
+      whitelisted SQL-Expression UP/DOWN/NEAREST/NONE)
+- [x] `GET /reports/export.xlsx` (Apache POI)
+- [x] `GET /dashboard` — Today/Week/Month, laufender Timer, Budget-Alerts, Top-Projekte/-Kunden
+- [x] `CsvExportService`/`XlsxExportService` teilen sich `ReportRowFetcher` + `ReportExportColumns`
 
 ### Frontend
 
-- [ ] Dashboard-Seite mit Today/Week/Month-Cards
-- [ ] Heatmap-Visualisierung (ECharts)
-- [ ] Line-Chart: Trendverlauf
-- [ ] Budget-Progress-Bars auf Dashboard
-- [ ] Top-Projekte und Top-Kunden
-- [ ] XLSX-Export
+- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
 
 ### Akzeptanzkriterien
 
-- Dashboard gibt sofortigen Überblick
-- Heatmap zeigt Aktivitätsmuster
-- Budget-Warnungen sichtbar bei >80%
+- Heatmap aggregiert pro Tag, 8h → Intensität 1.0 (Test) ✅
+- Rounded-Summary rundet 50min auf 60min (15-min UP) (Test) ✅
+- XLSX-Export erzeugt gültige Workbook-Bytes (Test) ✅
+- Dashboard liefert Perioden-Stats, kein Timer wenn keiner läuft (Test) ✅
+- Tests: 24/24 grün ✅
+
+### Code-Review (medium)
+
+- **Bug behoben:** `DashboardService` rief `timerService.getCurrent()`, das bei fehlendem Timer
+  `EntityNotFoundException` warf und die gemeinsame Transaktion als rollback-only markierte
+  (→ `UnexpectedRollbackException` beim Commit, trotz catch). Neue nicht-werfende
+  `TimerService.findCurrent()` (Optional) ersetzt den try/catch.
 
 ---
 

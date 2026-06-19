@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -54,6 +55,15 @@ public class TimerService {
     public TimerResponse getCurrent() {
         RunningTimer timer = currentOrThrow();
         return TimerResponse.from(timer, clock.instant());
+    }
+
+    /**
+     * Non-throwing variant for callers (e.g. the dashboard) that treat "no timer"
+     * as a normal state. Throwing would mark a surrounding transaction rollback-only.
+     */
+    public Optional<TimerResponse> findCurrent() {
+        return timerRepository.findFirstByOrderByStartTimeAsc()
+                .map(timer -> TimerResponse.from(timer, clock.instant()));
     }
 
     @Transactional

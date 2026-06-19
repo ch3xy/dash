@@ -1,6 +1,8 @@
 package com.ch3xy.dash.report;
 
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
+import com.ch3xy.dash.report.dto.HeatmapResponse;
+import com.ch3xy.dash.report.dto.HeatmapResponse.HeatmapDay;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
 import com.ch3xy.dash.report.dto.SummaryReportResponse.SummaryGroup;
 import com.ch3xy.dash.report.dto.TrendReportResponse;
@@ -8,6 +10,7 @@ import com.ch3xy.dash.report.dto.TrendReportResponse.TrendPoint;
 import com.ch3xy.dash.report.dto.WeeklyReportResponse;
 import com.ch3xy.dash.report.dto.WeeklyReportResponse.WeeklyDay;
 import com.ch3xy.dash.settings.AppSettingsService;
+import com.ch3xy.dash.settings.RoundingRule;
 import com.ch3xy.dash.timeentry.TimeEntry;
 import com.ch3xy.dash.timeentry.TimeEntryFilter;
 import com.ch3xy.dash.timeentry.TimeEntryRepository;
@@ -49,9 +52,15 @@ public class ReportService {
     // --- Summary ---------------------------------------------------------
 
     public SummaryReportResponse getSummary(ReportFilter filter) {
+        return getSummary(filter, false);
+    }
+
+    public SummaryReportResponse getSummary(ReportFilter filter, boolean rounded) {
         GroupBy groupBy = filter.groupBy() != null ? filter.groupBy() : GroupBy.PROJECT;
         ReportFilter effective = filter.withGroupBy(groupBy);
-        List<SummaryGroup> groups = queryRepository.summaryGrouped(effective);
+        RoundingRule rule = rounded ? settingsService.getRoundingRule() : RoundingRule.NONE;
+        int minutes = rounded ? settingsService.getRoundingMinutes() : 0;
+        List<SummaryGroup> groups = queryRepository.summaryGrouped(effective, rule, minutes);
 
         long total = groups.stream().mapToLong(SummaryGroup::durationSeconds).sum();
         long billable = groups.stream().mapToLong(SummaryGroup::billableDurationSeconds).sum();
@@ -101,9 +110,25 @@ public class ReportService {
     // --- Trends ----------------------------------------------------------
 
     public TrendReportResponse getTrends(ReportFilter filter, GroupBy granularity) {
+        return getTrends(filter, granularity, false);
+    }
+
+    public TrendReportResponse getTrends(ReportFilter filter, GroupBy granularity, boolean rounded) {
         GroupBy g = granularity != null ? granularity : GroupBy.DAY;
-        List<TrendPoint> data = queryRepository.trend(filter, g);
+        RoundingRule rule = rounded ? settingsService.getRoundingRule() : RoundingRule.NONE;
+        int minutes = rounded ? settingsService.getRoundingMinutes() : 0;
+        List<TrendPoint> data = queryRepository.trend(filter, g, rule, minutes);
         return new TrendReportResponse(g.name(), data);
+    }
+
+    // --- Heatmap ---------------------------------------------------------
+
+    public HeatmapResponse getHeatmap(Integer year) {
+        int y = year != null ? year : LocalDate.now(settingsService.getTimezone()).getYear();
+        LocalDate from = LocalDate.of(y, 1, 1);
+        LocalDate to = LocalDate.of(y, 12, 31);
+        List<HeatmapDay> data = queryRepository.heatmap(from, to);
+        return new HeatmapResponse(y, data);
     }
 
     // --- Weekly timesheet ------------------------------------------------

@@ -1,14 +1,17 @@
 package com.ch3xy.dash.report;
 
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
+import com.ch3xy.dash.report.dto.HeatmapResponse.HeatmapDay;
 import com.ch3xy.dash.report.dto.SummaryReportResponse.SummaryGroup;
 import com.ch3xy.dash.report.dto.TrendReportResponse.TrendPoint;
+import com.ch3xy.dash.settings.RoundingRule;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -25,15 +28,16 @@ public class ReportQueryRepository {
         this.jdbc = jdbc;
     }
 
-    public List<SummaryGroup> summaryGrouped(ReportFilter filter) {
+    public List<SummaryGroup> summaryGrouped(ReportFilter filter, RoundingRule rule, int minutes) {
         String keyExpr = groupKeyExpr(filter.groupBy());
         String labelExpr = groupLabelExpr(filter.groupBy());
+        String dur = durationExpr(rule, minutes);
 
         String sql = """
                 SELECT %s AS group_key,
                        %s AS group_label,
-                       SUM(te.duration_seconds) AS total_seconds,
-                       SUM(CASE WHEN te.billable THEN te.duration_seconds ELSE 0 END) AS billable_seconds,
+                       SUM(%s) AS total_seconds,
+                       SUM(CASE WHEN te.billable THEN %s ELSE 0 END) AS billable_seconds,
                        COALESCE(SUM(CASE WHEN te.billable THEN te.amount_snapshot ELSE 0 END), 0) AS revenue
                 FROM time_entries te
                 JOIN projects p ON p.id = te.project_id
@@ -42,7 +46,7 @@ public class ReportQueryRepository {
                 WHERE %s
                 GROUP BY group_key, group_label
                 ORDER BY total_seconds DESC
-                """.formatted(keyExpr, labelExpr, whereClause());
+                """.formatted(keyExpr, labelExpr, dur, dur, whereClause());
 
         return jdbc.query(sql, params(filter), (rs, rowNum) -> new SummaryGroup(
                 rs.getString("group_key"),
@@ -53,17 +57,18 @@ public class ReportQueryRepository {
         ));
     }
 
-    public List<TrendPoint> trend(ReportFilter filter, GroupBy granularity) {
+    public List<TrendPoint> trend(ReportFilter filter, GroupBy granularity, RoundingRule rule, int minutes) {
         String periodExpr = switch (granularity) {
             case DAY -> "to_char(te.entry_date, 'YYYY-MM-DD')";
             case WEEK -> "to_char(date_trunc('week', te.entry_date), 'YYYY-MM-DD')";
             case MONTH -> "to_char(te.entry_date, 'YYYY-MM')";
             default -> throw new IllegalArgumentException("Trend granularity must be DAY, WEEK or MONTH");
         };
+        String dur = durationExpr(rule, minutes);
 
         String sql = """
                 SELECT %s AS period,
-                       SUM(te.duration_seconds) AS total_seconds,
+                       SUM(%s) AS total_seconds,
                        COALESCE(SUM(CASE WHEN te.billable THEN te.amount_snapshot ELSE 0 END), 0) AS revenue
                 FROM time_entries te
                 JOIN projects p ON p.id = te.project_id
@@ -72,7 +77,7 @@ public class ReportQueryRepository {
                 WHERE %s
                 GROUP BY period
                 ORDER BY period ASC
-                """.formatted(periodExpr, whereClause());
+                """.formatted(periodExpr, dur, whereClause());
 
         return jdbc.query(sql, params(filter), (rs, rowNum) -> new TrendPoint(
                 rs.getString("period"),
@@ -123,6 +128,42 @@ public class ReportQueryRepository {
                     status
             );
         });
+    }
+
+    public List<HeatmapDay> heatmap(LocalDate from, LocalDate to) {
+        String sql = """
+                SELECT te.entry_date AS day, SUM(te.duration_seconds) AS total_seconds
+                FROM time_entries te
+                WHERE te.entry_date >= CAST(:from AS date) AND te.entry_date <= CAST(:to AS date)
+                GROUP BY te.entry_date
+                ORDER BY te.entry_date ASC
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("from", from)
+                .addValue("to", to);
+        return jdbc.query(sql, params, (rs, rowNum) -> {
+            long seconds = rs.getLong("total_seconds");
+            double intensity = Math.min(1.0, seconds / (8.0 * 3600.0));
+            return new HeatmapDay(rs.getObject("day", LocalDate.class), seconds, intensity);
+        });
+    }
+
+    /**
+     * SQL expression producing the (optionally rounded) duration in seconds for an
+     * entry. The rule is a whitelisted enum and {@code minutes} is a server-side
+     * integer, so inlining them into the SQL is safe.
+     */
+    private String durationExpr(RoundingRule rule, int minutes) {
+        if (rule == null || rule == RoundingRule.NONE || minutes <= 0) {
+            return "te.duration_seconds";
+        }
+        int bucket = minutes * 60;
+        return switch (rule) {
+            case UP -> "CEIL(te.duration_seconds::numeric / %d) * %d".formatted(bucket, bucket);
+            case DOWN -> "FLOOR(te.duration_seconds::numeric / %d) * %d".formatted(bucket, bucket);
+            case NEAREST -> "ROUND(te.duration_seconds::numeric / %d) * %d".formatted(bucket, bucket);
+            case NONE -> "te.duration_seconds";
+        };
     }
 
     private String groupKeyExpr(GroupBy groupBy) {
