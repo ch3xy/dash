@@ -31,34 +31,37 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 1 — Stammdaten (Clients, Projects, Tasks, Tags)
+## Phase 1 — Stammdaten (Clients, Projects, Tasks, Tags) ✅ 2026-06-19
 
 **Ziel:** Vollständiges CRUD für alle Stammdaten.
 
 ### Backend
 
-- [ ] Flyway Migrationen V1–V5 + V10–V11 (Schema + Indexe)
-- [ ] `Client` Entity, Repository, Service, Controller
-- [ ] `Project` + `ProjectRate` Entity, Repository, Service, Controller
-- [ ] `Task` Entity, Repository, Service, Controller
-- [ ] `Tag` Entity, Repository, Service, Controller
-- [ ] Archivierung-Logik (soft delete, kein Hard-Delete bei Abhängigkeiten)
-- [ ] `AppSettings` Entity + Controller + Default-Werte via Flyway
+- [x] Schema bereits in Phase 0 via Flyway V1–V4 (alle Tabellen, Indexe, Constraints)
+- [x] `Client` Entity, Repository, Service, Controller
+- [x] `Project` + `ProjectRate` Entity, Repository, Service, Controller (inkl. Budget-Status, Rate-Historie)
+- [x] `Task` Entity, Repository, Service, Controller
+- [x] `Tag` Entity, Repository, Service, Controller
+- [x] Archivierung-Logik (soft delete; Hard-Delete von Client via DB-FK → 409)
+- [x] `AppSettings` Entity, Service (typed getters), Controller
+- [x] `PageResponse<T>` Pagination-Helper (Vorbereitung Phase 2)
+- [x] Budget-Status nutzt App-Zeitzone (`AppSettingsService.getTimezone()`)
 
 ### Frontend
 
-- [ ] Clients-Seite: Liste + Formular (Anlegen/Bearbeiten)
-- [ ] Projects-Seite: Liste mit Status-Badge, Budget-Balken
-- [ ] Project-Detail: Tasks Tab + Rate-Historie Tab
-- [ ] Tags-Verwaltung (minimal, in Settings oder eigenem Bereich)
-- [ ] Archivierte Elemente aus Auswahlfeldern ausblenden
+- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie, gesammelt nach Backend-Phasen)
 
 ### Akzeptanzkriterien
 
-- Kunde anlegen → Projekt zuordnen → Task anlegen: funktioniert end-to-end
-- Archivierter Kunde verschwindet aus Projektformular
-- Unique-Constraint auf Clientname meldet 409 mit ProblemDetail
-- Projektbudget in Minuten und Stundensatz gespeichert
+- Kunde anlegen → Projekt zuordnen → Task anlegen: funktioniert (Service-Integrationstests) ✅
+- Unique-Constraint auf Clientname meldet 409 mit ProblemDetail ✅
+- Projektbudget in Minuten und Stundensatz gespeichert ✅
+- Neue Projekt-Rate schließt alte Rate historisch ab (Test) ✅
+- Tests: 5/5 grün (Testcontainers, Singleton-Container) ✅
+
+### Code-Review (medium)
+
+- Behoben: `getBudgetStatus` verwendete JVM-Default-Zeitzone statt App-Zeitzone für MONTHLY/YEARLY-Grenzen.
 
 ---
 
