@@ -9,8 +9,9 @@ Details siehe [CLAUDE.md](CLAUDE.md) und [.ai/](.ai/README.md).
 ## Voraussetzungen
 
 - Java 25, Docker (für PostgreSQL)
-- Node **22.22.3+** für das Frontend (Angular 22 lehnt ältere Node-Versionen ab).
-  Mit nvm: `nvm use 22.22.3`.
+- Node **26.x** für das Frontend (in `frontend/.nvmrc` gepinnt; Angular 22 unterstützt
+  `^22.22.3 || ^24.15.0 || >=26.0.0` — ungerade Majors wie 23/25 sind ausgeschlossen).
+  Mit nvm: `cd frontend && nvm use`.
 
 ## Start
 
@@ -32,7 +33,7 @@ Health-Check: <http://localhost:8080/api/v1/health>
 
 ```bash
 cd frontend
-nvm use 22.22.3      # Angular 22 benötigt Node >= 22.22.3
+nvm use              # liest .nvmrc → Node 26.3.1
 npm install          # einmalig
 npm start            # ng serve, proxyt /api → http://localhost:8080
 ```

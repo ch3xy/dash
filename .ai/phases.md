@@ -255,7 +255,8 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 ### Setup
 
 - [x] Angular 22 Projekt (`frontend/`), standalone Components, Signals, **zoneless** CD
-- [x] Node **22.22.3** via nvm erforderlich (Default-Node v20 wird vom CLI abgelehnt)
+- [x] Node **26.3.1** (gepinnt in `frontend/.nvmrc`); Default-Node v20 wird vom CLI abgelehnt.
+      Angular-22-Engine: `^22.22.3 || ^24.15.0 || >=26.0.0` (ungerade Majors ausgeschlossen)
 - [x] Dev-Proxy `frontend/proxy.conf.json` (`/api` → `:8080`), `apiBaseUrlInterceptor` (`/api/v1`)
 - [x] `errorInterceptor` → ProblemDetail-Toasts (Timer-404-Probe ausgenommen)
 - [x] Eigenes Design-System (`styles.scss`, Light/Dark), keine UI-Library; Charts als HTML/SVG
