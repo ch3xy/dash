@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: dash
+  datasource:
+    url: jdbc:postgresql://localhost:5432/timetracker
+    username: timetracker
+    password: timetracker
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+
+app:
+  timezone: Europe/Vienna
+  currency: EUR
+  cors:
+    allowed-origins: "http://localhost:4200"
