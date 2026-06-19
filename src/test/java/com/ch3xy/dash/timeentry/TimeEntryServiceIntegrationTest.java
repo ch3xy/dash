@@ -11,6 +11,8 @@ import com.ch3xy.dash.task.TaskResponse;
 import com.ch3xy.dash.task.TaskService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -94,6 +96,20 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
                 project.id(), null, "x", END, START, true, Set.of())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("endTime must be after startTime");
+    }
+
+    @Test
+    void clientSuppliedSortIsIgnoredAndDoesNotBreakTheNativeQuery() {
+        ProjectResponse project = projectWithDefaultRate();
+        service.create(new TimeEntryRequest(project.id(), null, "x", START, END, true, Set.of()));
+
+        // A camelCase sort property would previously be appended verbatim to the native SQL
+        // ORDER BY (e.g. "te.startTime"), crashing on PostgreSQL. It must now be ignored.
+        var sorted = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "startTime"));
+        var result = service.findAll(
+                new TimeEntryFilter(null, null, null, project.id(), null, null, null, null), sorted);
+
+        assertThat(result.getContent()).hasSize(1);
     }
 
     @Test

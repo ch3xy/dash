@@ -9,6 +9,7 @@ import com.ch3xy.dash.task.Task;
 import com.ch3xy.dash.task.TaskRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -78,9 +79,15 @@ public class TimeEntryService {
     }
 
     public Page<TimeEntryResponse> findAll(TimeEntryFilter filter, Pageable pageable) {
+        // The native filter query has a fixed, deterministic ORDER BY. Any client-supplied
+        // Sort would be appended verbatim as column names by Spring Data — a crash and a
+        // SQL-injection vector — so we strip it and keep only paging (preserving unpaged).
+        Pageable paging = pageable.isPaged()
+                ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize())
+                : Pageable.unpaged();
         return repository.findWithFilter(
                 idStr(filter.projectId()), idStr(filter.clientId()), idStr(filter.taskId()), idStr(filter.tagId()),
-                filter.from(), filter.to(), filter.billable(), filter.q(), pageable
+                filter.from(), filter.to(), filter.billable(), filter.q(), paging
         ).map(TimeEntryResponse::from);
     }
 
