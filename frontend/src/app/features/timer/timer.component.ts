@@ -1,12 +1,15 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { TagApiService } from '../../core/api/tag-api.service';
 import { TaskApiService } from '../../core/api/task-api.service';
 import { TimeEntryApiService } from '../../core/api/time-entry-api.service';
-import { Project, Tag, Task, TimeEntry, TimeEntryInput } from '../../core/models';
+import { KeyboardShortcutService } from '../../core/keyboard-shortcut.service';
+import { Project, RecentCombination, Tag, Task, TimeEntry, TimeEntryInput } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { TimerStateService } from '../../core/timer-state.service';
+import { AutofocusDirective } from '../../shared/directives/autofocus.directive';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
@@ -14,7 +17,7 @@ import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
 @Component({
   selector: 'app-timer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe, MoneyPipe],
+  imports: [FormsModule, DurationPipe, MoneyPipe, AutofocusDirective],
   template: `
     <div class="page">
       <div class="page-header">
@@ -33,6 +36,18 @@ import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
         </div>
       </div>
 
+      @if (recent().length) {
+        <div class="row wrap gap-2 mt-4">
+          <span class="faint">Zuletzt verwendet:</span>
+          @for (c of recent(); track c.projectId + (c.taskId ?? '')) {
+            <button class="btn btn-sm" (click)="startFromCombo(c)" [disabled]="timerState.isRunning()"
+                    title="Timer mit dieser Kombination starten">
+              ▶ {{ c.projectName }}@if (c.taskName) { <span class="faint"> · {{ c.taskName }}</span> }
+            </button>
+          }
+        </div>
+      }
+
       @if (loading()) {
         <div class="state"><div class="spinner"></div></div>
       } @else if (entries().length === 0) {
@@ -47,10 +62,18 @@ import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
               @for (e of entries(); track e.id) {
                 <tr>
                   <td>
-                    {{ e.description || '(keine Beschreibung)' }}
-                    @if (!e.billable) { <span class="badge muted">nicht abrechenbar</span> }
-                    @for (t of e.tags; track t.id) {
-                      <span class="badge" [style.color]="t.color || 'var(--text)'">{{ t.name }}</span>
+                    @if (editingDescId() === e.id) {
+                      <input class="input" [ngModel]="e.description ?? ''" appAutofocus
+                             (keydown.enter)="$any($event.target).blur()"
+                             (keydown.escape)="editingDescId.set(null)"
+                             (blur)="saveDescription(e, $any($event.target).value)" />
+                    } @else {
+                      <span (click)="editingDescId.set(e.id)" title="Klicken zum Bearbeiten"
+                            style="cursor: text;">{{ e.description || '(keine Beschreibung)' }}</span>
+                      @if (!e.billable) { <span class="badge muted">nicht abrechenbar</span> }
+                      @for (t of e.tags; track t.id) {
+                        <span class="badge" [style.color]="t.color || 'var(--text)'">{{ t.name }}</span>
+                      }
                     }
                   </td>
                   <td>
@@ -127,15 +150,18 @@ export class TimerComponent {
   private readonly projectApi = inject(ProjectApiService);
   private readonly taskApi = inject(TaskApiService);
   private readonly tagApi = inject(TagApiService);
-  private readonly timerState = inject(TimerStateService);
+  protected readonly timerState = inject(TimerStateService);
   private readonly toast = inject(ToastService);
+  private readonly shortcuts = inject(KeyboardShortcutService);
 
   protected readonly entries = signal<TimeEntry[]>([]);
   protected readonly projects = signal<Project[]>([]);
   protected readonly tasks = signal<Task[]>([]);
   protected readonly allTags = signal<Tag[]>([]);
+  protected readonly recent = signal<RecentCombination[]>([]);
   protected readonly loading = signal(true);
   protected readonly showDialog = signal(false);
+  protected readonly editingDescId = signal<string | null>(null);
 
   protected readonly totalSeconds = computed(() =>
     this.entries().reduce((s, e) => s + e.durationSeconds, 0),
@@ -154,8 +180,18 @@ export class TimerComponent {
 
   constructor() {
     this.load();
+    this.loadRecent();
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
+    this.shortcuts.commands$.pipe(takeUntilDestroyed()).subscribe((cmd) => {
+      if (cmd === 'new-entry') {
+        this.openNew();
+      }
+    });
+  }
+
+  private loadRecent(): void {
+    this.api.recentCombinations(6).subscribe((r) => this.recent.set(r));
   }
 
   private empty(): TimeEntryInput {
@@ -257,5 +293,36 @@ export class TimerComponent {
       this.timerState.refresh();
       this.toast.success('Timer fortgesetzt');
     });
+  }
+
+  startFromCombo(c: RecentCombination): void {
+    if (this.timerState.isRunning()) {
+      return;
+    }
+    this.timerState
+      .start({ projectId: c.projectId, taskId: c.taskId, billable: c.billable ?? true })
+      .subscribe(() => this.toast.success('Timer gestartet'));
+  }
+
+  saveDescription(e: TimeEntry, value: string): void {
+    this.editingDescId.set(null);
+    const next = value.trim() || null;
+    if (next === (e.description ?? null)) {
+      return;
+    }
+    this.api
+      .update(e.id, {
+        projectId: e.projectId,
+        taskId: e.taskId,
+        description: next,
+        startTime: e.startTime,
+        endTime: e.endTime,
+        billable: e.billable,
+        tagIds: e.tags.map((t) => t.id),
+      })
+      .subscribe(() => {
+        this.toast.success('Aktualisiert');
+        this.load();
+      });
   }
 }

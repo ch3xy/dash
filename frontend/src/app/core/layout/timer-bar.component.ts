@@ -1,8 +1,17 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Project, Task } from '../models';
 import { ProjectApiService } from '../api/project-api.service';
 import { TaskApiService } from '../api/task-api.service';
+import { KeyboardShortcutService } from '../keyboard-shortcut.service';
 import { TimerStateService } from '../timer-state.service';
 import { ToastService } from '../toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
@@ -15,7 +24,7 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
     <div class="timer-bar">
       @if (timerState.isRunning(); as _) {
         @let t = timerState.timer();
-        <input class="input desc" [ngModel]="t?.description ?? ''"
+        <input #descInput class="input desc" [ngModel]="t?.description ?? ''"
                (blur)="updateDescription($any($event.target).value)"
                placeholder="Woran arbeitest du?" />
         <span class="proj mono">{{ t?.projectName }}</span>
@@ -23,7 +32,7 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
         <button class="btn btn-danger btn-sm" (click)="stop()" title="Timer stoppen (s)">■ Stop</button>
         <button class="btn btn-ghost btn-sm" (click)="discard()" title="Verwerfen">✕</button>
       } @else {
-        <input class="input desc" [(ngModel)]="description" placeholder="Woran arbeitest du?"
+        <input #descInput class="input desc" [(ngModel)]="description" placeholder="Woran arbeitest du?"
                (keydown.enter)="start()" />
         <select class="select proj-select" [(ngModel)]="projectId" (ngModelChange)="onProjectChange()">
           <option [ngValue]="null" disabled>Projekt wählen…</option>
@@ -61,7 +70,9 @@ export class TimerBarComponent {
   private readonly projectApi = inject(ProjectApiService);
   private readonly taskApi = inject(TaskApiService);
   private readonly toast = inject(ToastService);
+  private readonly shortcuts = inject(KeyboardShortcutService);
 
+  private readonly descInput = viewChild<ElementRef<HTMLInputElement>>('descInput');
   protected readonly projects = signal<Project[]>([]);
   protected readonly tasks = signal<Task[]>([]);
 
@@ -72,6 +83,11 @@ export class TimerBarComponent {
 
   constructor() {
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
+    this.shortcuts.commands$.pipe(takeUntilDestroyed()).subscribe((cmd) => {
+      if (cmd === 'focus-timer') {
+        this.descInput()?.nativeElement.focus();
+      }
+    });
   }
 
   onProjectChange(): void {

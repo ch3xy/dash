@@ -216,12 +216,14 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 - [x] Import Clockify CSV (`POST /api/v1/import/clockify`, find-or-create, per-Zeile-Transaktion)
 - [x] Backup-Export aller Daten als JSON (`GET /api/v1/backup`)
 
-### Frontend (ausstehend — kein Angular-Projekt scaffolded)
+### Frontend ✅ 2026-06-19
 
-- [ ] Tastatur-Shortcuts: `n` neuer Eintrag, `t` Timer, `s` Start/Stop, `/` Suche
-- [ ] Schneller Projektwechsel in Timer-Bar
-- [ ] Dark/Light Mode vollständig
-- [ ] Inline-Editing in Detailliste
+- [x] Tastatur-Shortcuts: `n` neuer Eintrag, `t` Timer-Fokus, `s` Start/Stop, `/` Suche/Timer
+      (`KeyboardShortcutService`, ignoriert Eingabefelder)
+- [x] Schneller Projektwechsel / Zuletzt-verwendet-Chips auf Timer-Seite
+      (`recent-combinations`-Endpoint → 1-Klick-Timerstart)
+- [x] Dark/Light Mode vollständig (Theme-Toggle, persistiert, defensiver Storage-Zugriff)
+- [x] Inline-Editing der Beschreibung in der Timer-Liste (`AutofocusDirective`)
 
 ### Backup-Restore
 

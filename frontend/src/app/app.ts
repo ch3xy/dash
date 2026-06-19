@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { KeyboardShortcutService } from './core/keyboard-shortcut.service';
 import { ThemeService } from './core/theme.service';
 import { TimerBarComponent } from './core/layout/timer-bar.component';
 import { ToastHostComponent } from './core/layout/toast-host.component';
@@ -100,7 +101,10 @@ export class App {
     { path: '/settings', label: 'Einstellungen', icon: '⚙' },
   ];
 
+  private readonly shortcuts = inject(KeyboardShortcutService);
+
   constructor() {
     this.theme.apply();
+    this.shortcuts.init();
   }
 }

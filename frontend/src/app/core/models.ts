@@ -193,7 +193,7 @@ export interface RecentCombination {
   projectName: string;
   taskId: Uuid | null;
   taskName: string | null;
-  billable: boolean;
+  billable?: boolean; // not currently returned by the API
 }
 
 // ---- Reports ----
