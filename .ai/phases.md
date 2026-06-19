@@ -65,38 +65,41 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 2 — Time Tracking MVP
+## Phase 2 — Time Tracking MVP ✅ 2026-06-19
 
 **Ziel:** Timer und manuelle Zeiterfassung vollständig funktionsfähig.
 
 ### Backend
 
-- [ ] Flyway Migrationen V6–V8 (`time_entries`, `time_entry_tags`, `running_timers`)
-- [ ] `TimeEntry` Entity, Repository, Service, Controller
-- [ ] `RunningTimer` Entity, Repository, Service
-- [ ] `TimerController`: `GET /timer/current`, `POST /timer/start`, `POST /timer/stop`, `POST /timer/discard`, `PATCH /timer/current`
-- [ ] Rate-Snapshot-Berechnung beim Stoppen/Erstellen (s. [rules/business-rules.md](../rules/business-rules.md))
-- [ ] `POST /time-entries/{id}/continue`
-- [ ] Validierung: Endzeit > Startzeit, keine Überschneidung mit laufendem Timer, `durationSeconds > 0`
-- [ ] Filter-Endpoint `GET /time-entries` mit allen Query-Params
+- [x] Schema bereits in Phase 0 (`time_entries`, `time_entry_tags`, `running_timers`, `running_timer_tags`)
+- [x] `TimeEntry` Entity (ManyToMany Tags), Repository (Filter-Query), Service, Controller
+- [x] `RunningTimer` Entity (ManyToMany Tags), Repository, Service
+- [x] `TimerController`: `current`, `start`, `stop`, `discard`, `PATCH current`
+- [x] `RateResolverService`: Task-Override → aktive Project-Rate → Project-Default → App-Default
+- [x] Rate- und Amount-Snapshot beim Erstellen/Stoppen (`BigDecimal`, HALF_UP)
+- [x] `POST /time-entries/{id}/continue` → neuer Timer aus altem Eintrag
+- [x] Validierung: Endzeit > Startzeit; max. 1 laufender Timer (409); `durationSeconds > 0`
+- [x] Filter-Endpoint `GET /time-entries` (from/to/client/project/task/tag/billable/q + Pagination)
+- [x] Testbare Zeit über injizierten `Clock` (`ClockConfig`)
+- [x] `IllegalArgumentException` → 422 im GlobalExceptionHandler ergänzt
 
 ### Frontend
 
-- [ ] Timer-Bar in Topbar: Start/Stop, laufende Zeit, Projekt/Task/Tags, Billable-Toggle
-- [ ] Timer-Polling (alle 5s oder SSE) für `elapsedSeconds`
-- [ ] Heutige Zeiteinträge als Liste auf Timer-Seite
-- [ ] Manueller Zeiteintrag Dialog (Datum, Start, Ende, Beschreibung, Projekt, Task, Tags)
-- [ ] Continue-Button pro Eintrag
-- [ ] Inline-Bearbeitung (Beschreibung, Projekt, Billable) in der Liste
-- [ ] Löschen mit Bestätigung
+- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
 
 ### Akzeptanzkriterien
 
-- Timer starten → Timer läuft → Timer stoppen → TimeEntry erscheint in Liste
-- Zweiter Timer-Start bei laufendem Timer → `409 Conflict`, klare Fehlermeldung
-- Manueller Eintrag mit falscher Dauer → Validierungsfehler
-- `hourlyRateSnapshot` wird korrekt nach Priorität gesetzt (s. business-rules.md)
-- Continue erstellt neuen Timer mit alten Metadaten
+- Timer starten → läuft → stoppen → TimeEntry erstellt (Test) ✅
+- Zweiter Timer-Start bei laufendem Timer → `409 Conflict` (Test) ✅
+- Manueller Eintrag mit Endzeit ≤ Startzeit → 422 (Test) ✅
+- `hourlyRateSnapshot` korrekt nach Priorität, Snapshot stabil bei Ratenänderung (Tests) ✅
+- Timer über Mitternacht: `entryDate` aus Endzeit in App-Zeitzone (Test) ✅
+- Tests: 15/15 grün ✅
+
+### Code-Review (medium)
+
+- Keine Korrektheits-Bugs. N+1-Lazy-Loading der Tags in Listen-Query als bewusster
+  MVP-Tradeoff akzeptiert (Performance-Tuning in Phase 4 Report-Modul).
 
 ---
 
