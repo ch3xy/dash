@@ -248,6 +248,52 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
+## Frontend — Angular 22 (Phasen 0–6 UI) ✅ 2026-06-19
+
+**Ziel:** Vollständige Angular-Oberfläche für den gesamten Backend-Funktionsumfang.
+
+### Setup
+
+- [x] Angular 22 Projekt (`frontend/`), standalone Components, Signals, **zoneless** CD
+- [x] Node **22.22.3** via nvm erforderlich (Default-Node v20 wird vom CLI abgelehnt)
+- [x] Dev-Proxy `frontend/proxy.conf.json` (`/api` → `:8080`), `apiBaseUrlInterceptor` (`/api/v1`)
+- [x] `errorInterceptor` → ProblemDetail-Toasts (Timer-404-Probe ausgenommen)
+- [x] Eigenes Design-System (`styles.scss`, Light/Dark), keine UI-Library; Charts als HTML/SVG
+
+### Kern
+
+- [x] App-Shell: Sidebar-Navigation, Topbar mit Live-Timer-Bar, Theme-Toggle
+- [x] 9 typisierte API-Services + DTO-Modelle (`core/`)
+- [x] `TimerStateService` (Polling + lokaler 1s-Tick), `ThemeService`, `ToastService`
+- [x] Pipes: `duration`, `money`; Date-Utils
+
+### Seiten
+
+- [x] Dashboard (Perioden-Stats, laufender Timer, Budget-Alerts, Top-Projekte/-Kunden)
+- [x] Timer (Heute-Liste, manueller Eintrag, Continue/Edit/Delete, Tags, Billable)
+- [x] Timesheet (Wochenraster, Navigation, Quick-Add je Tageszelle)
+- [x] Kalender (Wochenansicht, positionierte Einträge auf Stundenraster)
+- [x] Kunden (CRUD, Archiv, Delete mit 409-Handling)
+- [x] Projekte (Liste + Detail: Budget-Status, Tasks, Ratenhistorie, Status)
+- [x] Tags (CRUD inkl. Farbe, Archiv)
+- [x] Reports (URL-synchronisierte Filter, Summary-Cards, Bar-/Line-Charts, Budget-Tabelle,
+      paginierte Detailtabelle, CSV/XLSX-Export)
+- [x] Einstellungen (Settings-Form, JSON-Backup-Download, Clockify-CSV-Import)
+
+### Verifikation
+
+- `ng build` grün (alle Lazy-Chunks). End-to-End gegen laufendes Backend geprüft
+  (Proxy, Health, Settings, Client/Project/TimeEntry anlegen, Summary-Report).
+- Headless-Chrome-Screenshots: Dashboard, Reports, Projekte, Timer rendern mit Echtdaten.
+
+### Bug behoben (Frontend↔Backend-Contract)
+
+- Timer-Liste sendete `sort=startTime,desc`; das Backend interpoliert den Sort-Wert direkt
+  in natives SQL (`column te.starttime does not exist`). Frontend sendet keinen `sort`-Param
+  mehr. (Backend-seitiges Sort-Mapping bleibt ein offener Härtungspunkt.)
+
+---
+
 ## Phase 7 — Optionale Zukunftsfeatures
 
 Nicht im MVP-Scope:
