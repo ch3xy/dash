@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
@@ -40,4 +41,14 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
     );
 
     boolean existsByTaskId(UUID taskId);
+
+    @Query("""
+            SELECT DISTINCT te FROM TimeEntry te
+            LEFT JOIN FETCH te.project p
+            LEFT JOIN FETCH p.client
+            LEFT JOIN FETCH te.task
+            WHERE te.entryDate >= :from AND te.entryDate <= :to
+            ORDER BY te.entryDate ASC, te.startTime ASC
+            """)
+    List<TimeEntry> findByEntryDateRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
 }

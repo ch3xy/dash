@@ -18,7 +18,9 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -71,6 +73,19 @@ public class TimeEntryService {
         entry.setSource(source);
         apply(entry, req);
         return TimeEntryResponse.from(repository.save(entry));
+    }
+
+    /**
+     * Creates several manual entries in one transaction (timesheet bulk entry).
+     * Either all entries are persisted or none are.
+     */
+    @Transactional
+    public List<TimeEntryResponse> createAll(List<TimeEntryRequest> requests) {
+        List<TimeEntryResponse> created = new ArrayList<>(requests.size());
+        for (TimeEntryRequest req : requests) {
+            created.add(create(req, TimeEntrySource.MANUAL));
+        }
+        return created;
     }
 
     @Transactional

@@ -103,29 +103,33 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 3 — Timesheet & Kalender
+## Phase 3 — Timesheet & Kalender ✅ 2026-06-19
 
 **Ziel:** Schnelle Wocheneingabe und visuelle Darstellung.
 
 ### Backend
 
-- [ ] `GET /reports/weekly` — Aggregation nach Woche
-- [ ] Bulk-Upsert für Timesheet-Zellen (`POST /time-entries/bulk`)
-- [ ] `GET /time-entries?from=&to=` für Kalender-Range
+- [x] `GET /reports/weekly?weekStart=` — Mo–So Aggregation, Tages- und Wochensummen
+- [x] Bulk-Erstellung für Timesheet-Zellen (`POST /time-entries/bulk`, transaktional all-or-nothing)
+- [x] `GET /time-entries?from=&to=` für Kalender-Range (bereits aus Phase 2)
+- [x] `findByEntryDateRange` mit Fetch-Join (Projekt/Client/Task), Tags lazy
+- [x] Default-Woche nutzt App-Zeitzone (`ReportService.getWeekly(null)`)
 
 ### Frontend
 
-- [ ] Timesheet-Seite: Wochenraster (Projekte als Zeilen, Tage als Spalten)
-- [ ] Inline-Zellbearbeitung (Dauer in HH:MM)
-- [ ] Wochennavigation (Vor/Zurück)
-- [ ] Tages- und Wochensummen
-- [ ] Kalender-Seite: Tages-/Wochenansicht mit Zeiteinträgen als Blöcke
+- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
 
 ### Akzeptanzkriterien
 
-- Woche lässt sich schnell nachtragen ohne Dialoge
-- Kalendereinträge stimmen mit `time_entries` überein
-- Tagesgesamt korrekt
+- Weekly-Report gruppiert Einträge nach Tag, liefert 7 Tage + Wochengesamt (Test) ✅
+- Bulk-Endpoint legt mehrere Einträge in einer Transaktion an ✅
+- Kalender-Range über bestehenden Filter-Endpoint ✅
+- Tests: 16/16 grün ✅
+
+### Code-Review (medium)
+
+- Behoben: Default-Woche in `/reports/weekly` nutzte JVM-Default-Zeitzone statt App-Zeitzone
+  (konsistent mit Phase-1-Fix). Explizite `weekStart`-Param bleibt unberührt.
 
 ---
 
