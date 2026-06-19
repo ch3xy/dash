@@ -12,27 +12,46 @@ import java.util.UUID;
 
 public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
 
-    @Query("""
-            SELECT DISTINCT te FROM TimeEntry te
-            LEFT JOIN te.project p
-            LEFT JOIN p.client c
-            LEFT JOIN te.task t
-            LEFT JOIN te.tags tg
-            WHERE (:projectId IS NULL OR p.id = :projectId)
-              AND (:clientId IS NULL OR c.id = :clientId)
-              AND (:taskId IS NULL OR t.id = :taskId)
-              AND (:tagId IS NULL OR tg.id = :tagId)
-              AND (:from IS NULL OR te.entryDate >= :from)
-              AND (:to IS NULL OR te.entryDate <= :to)
-              AND (:billable IS NULL OR te.billable = :billable)
-              AND (:q IS NULL OR LOWER(te.description) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%')))
-            ORDER BY te.entryDate DESC, te.startTime DESC
-            """)
+    // Native SQL: every nullable filter is wrapped in an explicit CAST so PostgreSQL
+    // can determine the bind parameter type even when the value is NULL. The tag
+    // filter uses EXISTS so no row duplication occurs (no DISTINCT needed).
+    @Query(value = """
+            SELECT te.* FROM time_entries te
+            JOIN projects p ON p.id = te.project_id
+            LEFT JOIN clients c ON c.id = p.client_id
+            WHERE (CAST(:projectId AS uuid) IS NULL OR te.project_id = CAST(:projectId AS uuid))
+              AND (CAST(:clientId AS uuid) IS NULL OR p.client_id = CAST(:clientId AS uuid))
+              AND (CAST(:taskId AS uuid) IS NULL OR te.task_id = CAST(:taskId AS uuid))
+              AND (CAST(:from AS date) IS NULL OR te.entry_date >= CAST(:from AS date))
+              AND (CAST(:to AS date) IS NULL OR te.entry_date <= CAST(:to AS date))
+              AND (CAST(:billable AS boolean) IS NULL OR te.billable = CAST(:billable AS boolean))
+              AND (CAST(:q AS text) IS NULL OR LOWER(te.description) LIKE LOWER('%' || CAST(:q AS text) || '%'))
+              AND (CAST(:tagId AS uuid) IS NULL OR EXISTS (
+                      SELECT 1 FROM time_entry_tags tt
+                      WHERE tt.time_entry_id = te.id AND tt.tag_id = CAST(:tagId AS uuid)))
+            ORDER BY te.entry_date DESC, te.start_time DESC
+            """,
+            countQuery = """
+            SELECT count(*) FROM time_entries te
+            JOIN projects p ON p.id = te.project_id
+            LEFT JOIN clients c ON c.id = p.client_id
+            WHERE (CAST(:projectId AS uuid) IS NULL OR te.project_id = CAST(:projectId AS uuid))
+              AND (CAST(:clientId AS uuid) IS NULL OR p.client_id = CAST(:clientId AS uuid))
+              AND (CAST(:taskId AS uuid) IS NULL OR te.task_id = CAST(:taskId AS uuid))
+              AND (CAST(:from AS date) IS NULL OR te.entry_date >= CAST(:from AS date))
+              AND (CAST(:to AS date) IS NULL OR te.entry_date <= CAST(:to AS date))
+              AND (CAST(:billable AS boolean) IS NULL OR te.billable = CAST(:billable AS boolean))
+              AND (CAST(:q AS text) IS NULL OR LOWER(te.description) LIKE LOWER('%' || CAST(:q AS text) || '%'))
+              AND (CAST(:tagId AS uuid) IS NULL OR EXISTS (
+                      SELECT 1 FROM time_entry_tags tt
+                      WHERE tt.time_entry_id = te.id AND tt.tag_id = CAST(:tagId AS uuid)))
+            """,
+            nativeQuery = true)
     Page<TimeEntry> findWithFilter(
-            @Param("projectId") UUID projectId,
-            @Param("clientId") UUID clientId,
-            @Param("taskId") UUID taskId,
-            @Param("tagId") UUID tagId,
+            @Param("projectId") String projectId,
+            @Param("clientId") String clientId,
+            @Param("taskId") String taskId,
+            @Param("tagId") String tagId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to,
             @Param("billable") Boolean billable,

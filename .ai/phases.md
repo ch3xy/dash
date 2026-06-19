@@ -133,36 +133,42 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 4 — Reports Basis
+## Phase 4 — Reports Basis ✅ 2026-06-19
 
 **Ziel:** Entscheidungsrelevante Reports.
 
 ### Backend
 
-- [ ] `GET /reports/summary` mit Gruppierung
-- [ ] `GET /reports/detailed` (paginiert)
-- [ ] `GET /reports/budget`
-- [ ] `GET /reports/revenue`
-- [ ] `GET /reports/trends`
-- [ ] `GET /reports/export.csv`
-- [ ] Filter: Zeitraum, Kunde, Projekt, Task, Tag, Billable
-- [ ] Gruppierung: Tag/Woche/Monat/Kunde/Projekt/Task
+- [x] `GET /reports/summary` mit Gruppierung (Totals, Billable-Ratio, Revenue je Gruppe)
+- [x] `GET /reports/detailed` (paginiert, gleicher Filter)
+- [x] `GET /reports/budget` (usedPercent, Status ON_TRACK/WARNING/EXCEEDED)
+- [x] `GET /reports/revenue` (nach Revenue sortierte Gruppen, Default CLIENT)
+- [x] `GET /reports/trends?granularity=DAY|WEEK|MONTH`
+- [x] `GET /reports/export.csv` (Apache Commons CSV)
+- [x] Filter: Zeitraum, Kunde, Projekt, Task, Tag, Billable, Volltext
+- [x] Gruppierung: Tag/Woche/Monat/Kunde/Projekt/Task (whitelisted via `GroupBy`-Enum)
+- [x] `ReportQueryRepository` mit nativen SQL-Aggregationen (NamedParameterJdbcTemplate)
 
 ### Frontend
 
-- [ ] Reports-Seite mit Filterbar (sticky)
-- [ ] Summary-Cards (Gesamtzeit, Billable, Non-Billable, Umsatz)
-- [ ] Bar-Chart: Stunden pro Projekt
-- [ ] Donut-Chart: Billable vs Non-Billable
-- [ ] Detailtabelle mit allen Einträgen
-- [ ] CSV-Download-Button
+- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
 
 ### Akzeptanzkriterien
 
-- Zeitraumfilter funktioniert korrekt
-- Gruppierung nach Projekt/Kunde liefert konsistente Summen
-- Budgetverbrauch sichtbar (usedPercent, Status-Indikator)
-- CSV-Export öffnet sich korrekt
+- Summary gruppiert nach Projekt, korrekte Billable-Ratio + Revenue (Test) ✅
+- Budget-Report: 90% Auslastung → WARNING (Test) ✅
+- Trends nach Tag mit Dauer + Revenue (Test) ✅
+- CSV enthält Header + Zeilen mit Dauer/Betrag (Test) ✅
+- Tests: 20/20 grün ✅
+
+### Code-Review (medium)
+
+- **Latenter Bug behoben:** `findWithFilter` (seit Phase 2) scheiterte auf PostgreSQL bei
+  NULL-Filterwerten (`:param IS NULL` mit untypisiertem Bind). Auf natives SQL mit
+  expliziten `CAST(... AS type)`-Guards umgestellt; Tag-Filter über `EXISTS` (kein `DISTINCT`).
+- **Konsistenz:** `budget()`-Report nutzte SQL `CURRENT_DATE` (DB-Server-Zeitzone) für
+  MONTHLY/YEARLY-Grenzen; jetzt App-Zeitzone (Monats-/Jahresstart als Bind-Param), konsistent
+  mit Phase-1-`getBudgetStatus`.
 
 ---
 

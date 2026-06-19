@@ -53,9 +53,13 @@ public class TimeEntryService {
 
     public Page<TimeEntryResponse> findAll(TimeEntryFilter filter, Pageable pageable) {
         return repository.findWithFilter(
-                filter.projectId(), filter.clientId(), filter.taskId(), filter.tagId(),
+                idStr(filter.projectId()), idStr(filter.clientId()), idStr(filter.taskId()), idStr(filter.tagId()),
                 filter.from(), filter.to(), filter.billable(), filter.q(), pageable
         ).map(TimeEntryResponse::from);
+    }
+
+    private static String idStr(UUID id) {
+        return id != null ? id.toString() : null;
     }
 
     public TimeEntryResponse findById(UUID id) {
