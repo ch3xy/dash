@@ -10,6 +10,8 @@ import com.ch3xy.dash.task.TaskRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,19 +38,43 @@ public class TimeEntryService {
     private final TagRepository tagRepository;
     private final RateResolverService rateResolver;
     private final AppSettingsService settingsService;
+    private final NamedParameterJdbcTemplate jdbc;
 
     public TimeEntryService(TimeEntryRepository repository,
                             ProjectRepository projectRepository,
                             TaskRepository taskRepository,
                             TagRepository tagRepository,
                             RateResolverService rateResolver,
-                            AppSettingsService settingsService) {
+                            AppSettingsService settingsService,
+                            NamedParameterJdbcTemplate jdbc) {
         this.repository = repository;
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.tagRepository = tagRepository;
         this.rateResolver = rateResolver;
         this.settingsService = settingsService;
+        this.jdbc = jdbc;
+    }
+
+    /**
+     * The most recently used project/task pairings, ordered by last use.
+     */
+    public List<RecentCombination> recentCombinations(int limit) {
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit);
+        return jdbc.query("""
+                SELECT te.project_id, p.name AS project_name, te.task_id, t.name AS task_name,
+                       MAX(te.created_at) AS last_used
+                FROM time_entries te
+                JOIN projects p ON p.id = te.project_id
+                LEFT JOIN tasks t ON t.id = te.task_id
+                GROUP BY te.project_id, p.name, te.task_id, t.name
+                ORDER BY last_used DESC
+                LIMIT :limit
+                """, params, (rs, rowNum) -> new RecentCombination(
+                rs.getObject("project_id", UUID.class),
+                rs.getString("project_name"),
+                rs.getObject("task_id", UUID.class),
+                rs.getString("task_name")));
     }
 
     public Page<TimeEntryResponse> findAll(TimeEntryFilter filter, Pageable pageable) {

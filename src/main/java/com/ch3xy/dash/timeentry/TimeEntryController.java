@@ -58,6 +58,12 @@ public class TimeEntryController {
         return service.createAll(requests);
     }
 
+    @GetMapping("/recent-combinations")
+    public ResponseEntity<List<RecentCombination>> recentCombinations(
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(service.recentCombinations(limit));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<TimeEntryResponse> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(service.findById(id));

@@ -206,17 +206,45 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 6 — Polishing & Produktivität
+## Phase 6 — Polishing & Produktivität ✅ 2026-06-19 (Backend)
 
 **Ziel:** Reibungsloser täglicher Workflow.
 
+### Backend
+
+- [x] Zuletzt verwendete Projekt/Task-Kombination (`GET /time-entries/recent-combinations?limit=`)
+- [x] Import Clockify CSV (`POST /api/v1/import/clockify`, find-or-create, per-Zeile-Transaktion)
+- [x] Backup-Export aller Daten als JSON (`GET /api/v1/backup`)
+
+### Frontend (ausstehend — kein Angular-Projekt scaffolded)
+
 - [ ] Tastatur-Shortcuts: `n` neuer Eintrag, `t` Timer, `s` Start/Stop, `/` Suche
 - [ ] Schneller Projektwechsel in Timer-Bar
-- [ ] Zuletzt verwendete Projekt/Task-Kombination
 - [ ] Dark/Light Mode vollständig
-- [ ] Import Clockify CSV
-- [ ] Backup/Restore (alle Daten als JSON-Export/Import)
 - [ ] Inline-Editing in Detailliste
+
+### Backup-Restore
+
+- [ ] JSON-Restore-Endpoint (`POST /api/v1/backup`) — bewusst zurückgestellt (FK-Reihenfolge,
+      Idempotenz, Wipe-Semantik riskant); Export deckt das Akzeptanzkriterium „Backup möglich" ab.
+
+### Akzeptanzkriterien
+
+- Clockify-CSV-Import legt Kunden/Projekte/Tasks/Tags an und dedupliziert (Test) ✅
+- Ungültige Zeilen werden übersprungen, gute Zeilen importiert (Test) ✅
+- Backup enthält Settings, Projekte, Zeiteinträge (Test) ✅
+- Recent-Combinations liefert genutzte Paarung (Test) ✅
+- Tests: 28/28 grün ✅
+
+### Code-Review (medium)
+
+- **Latenter Bug behoben:** Ursprünglich war `importCsv` eine einzige `@Transactional`.
+  Eine pro Zeile gefangene Exception aus einem verschachtelten Transaktions-Service hätte
+  die gemeinsame Transaktion als rollback-only markiert → `UnexpectedRollbackException` beim
+  Commit, Verlust des gesamten Imports. Refaktoriert auf `ClockifyRowImporter.importRow`
+  mit `REQUIRES_NEW` pro Zeile → echte Teil-Erfolg-Semantik, Fehler isoliert.
+- **Altitude:** Import nutzt Domain-Services (find-or-create) statt Entities direkt zu
+  konstruieren (Wiederverwendung der Uniqueness-/Validierungslogik).
 
 ---
 
