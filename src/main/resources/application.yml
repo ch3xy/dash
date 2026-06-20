@@ -20,6 +20,9 @@ spring:
 
 server:
   port: 8080
+  # Trust X-Forwarded-Prefix from the reverse proxy (Caddy) so Spring generates
+  # correct URLs when the app is served under a path prefix (e.g. /dash)
+  forward-headers-strategy: framework
   error:
     include-message: always
     include-binding-errors: always
