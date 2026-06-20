@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   HostListener,
+  OnDestroy,
   computed,
   inject,
   signal,
@@ -77,7 +78,8 @@ type Interact =
                 <div class="grid-bg" [style.height.px]="hourPx * 24"
                      (mousedown)="onGridMouseDown($event, col.date)"
                      (mousemove)="onGridMouseMove($event, col.date)"
-                     (mouseup)="onGridMouseUp()">
+                     (mouseup)="onGridMouseUp()"
+                     (touchstart)="onGridTouchStart($event, col.date)">
 
                   <!-- Hour + half-hour lines -->
                   @for (h of hours; track h) {
@@ -112,7 +114,8 @@ type Interact =
                          [style.border-left-color]="b.entry.projectColor || 'var(--brand)'"
                          [style.background]="(b.entry.projectColor || 'var(--brand)') + '22'"
                          (mousedown)="onBlockMouseDown($event, b.entry)"
-                         (click)="onBlockClick($event, b.entry)">
+                         (click)="onBlockClick($event, b.entry)"
+                         (touchstart)="onBlockTouchStart($event, b.entry)">
                       <div class="b-proj">{{ b.entry.projectName }}</div>
                       @if (b.entry.description && b.height > 30) {
                         <div class="b-desc">{{ b.entry.description }}</div>
@@ -121,7 +124,8 @@ type Interact =
                         <div class="b-dur mono">{{ b.entry.durationSeconds | duration: 'HH:MM' }}</div>
                       }
                       <div class="resize-handle"
-                           (mousedown)="onResizeMouseDown($event, b.entry, col.date)"></div>
+                           (mousedown)="onResizeMouseDown($event, b.entry, col.date)"
+                           (touchstart)="onResizeTouchStart($event, b.entry, col.date)"></div>
                     </div>
                   }
                 </div>
@@ -248,7 +252,7 @@ type Interact =
     .ghost-label { font-size: var(--fs-xs); font-weight: 600; color: var(--brand); }
   `],
 })
-export class CalendarComponent {
+export class CalendarComponent implements OnDestroy {
   private readonly api = inject(TimeEntryApiService);
   private readonly projectApi = inject(ProjectApiService);
   private readonly taskApi = inject(TaskApiService);
@@ -266,6 +270,9 @@ export class CalendarComponent {
   private readonly entries = signal<TimeEntry[]>([]);
   protected readonly interact = signal<Interact | null>(null);
   private lastDragActive = false;
+  private interactFromTouch = false;
+  private docTouchMove: ((e: TouchEvent) => void) | null = null;
+  private docTouchEnd: ((e: TouchEvent) => void) | null = null;
 
   protected readonly projects = signal<Project[]>([]);
   protected readonly tasks = signal<Task[]>([]);
@@ -429,7 +436,15 @@ export class CalendarComponent {
     const ix = this.interact();
     this.lastDragActive = ix?.active ?? false;
     this.interact.set(null);
-    if (!ix || !ix.active) return;
+    if (!ix || !ix.active) {
+      // Touch tap without drag: open create or edit dialog
+      if (this.interactFromTouch) {
+        if (ix?.kind === 'move') this.editEntry(ix.entry);
+      }
+      this.interactFromTouch = false;
+      return;
+    }
+    this.interactFromTouch = false;
 
     if (ix.kind === 'create') {
       this.openNewEntry(ix.colDate, ix.startMin, ix.endMin);
@@ -467,6 +482,115 @@ export class CalendarComponent {
     const endMin = startMin + Math.round(entry.durationSeconds / 60);
     this.interact.set({ kind: 'resize', entry, colDate, startMin, endMin, active: false });
     e.stopPropagation();
+  }
+
+  // ─── Touch events ───────────────────────────────────────────────────────────
+
+  /** Grid tap → open create dialog at tapped time; grid swipe → let browser scroll. */
+  protected onGridTouchStart(e: TouchEvent, date: string): void {
+    const touch = e.changedTouches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const startMin = this.snapMinutes(this.yToMinutes(touch.clientY - rect.top));
+    let moved = false;
+
+    const onMove = (mv: TouchEvent) => {
+      const t = mv.changedTouches[0];
+      if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) moved = true;
+    };
+    const onEnd = () => {
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      if (!moved) this.openNewEntry(date, startMin, startMin + 60);
+    };
+    document.addEventListener('touchmove', onMove);
+    document.addEventListener('touchend', onEnd);
+  }
+
+  /** Block touch start → drag to move or tap to edit. */
+  protected onBlockTouchStart(e: TouchEvent, entry: TimeEntry): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.changedTouches[0];
+    const blockTop = (e.currentTarget as HTMLElement).getBoundingClientRect().top;
+    const offsetMin = Math.round(((touch.clientY - blockTop) / HOUR_PX) * 60);
+    this.interact.set({
+      kind: 'move', entry, colDate: entry.entryDate,
+      offsetMin, currentStart: this.entryStartMin(entry),
+      durationMin: Math.round(entry.durationSeconds / 60), active: false,
+    });
+    this.interactFromTouch = true;
+    this.registerTouchListeners();
+  }
+
+  /** Resize handle touch → always drag. */
+  protected onResizeTouchStart(e: TouchEvent, entry: TimeEntry, colDate: string): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const startMin = this.entryStartMin(entry);
+    const endMin = startMin + Math.round(entry.durationSeconds / 60);
+    this.interact.set({ kind: 'resize', entry, colDate, startMin, endMin, active: false });
+    this.interactFromTouch = true;
+    this.registerTouchListeners();
+  }
+
+  private registerTouchListeners(): void {
+    this.docTouchMove = (e) => this.onDocTouchMove(e);
+    this.docTouchEnd = () => this.onDocTouchEnd();
+    document.addEventListener('touchmove', this.docTouchMove, { passive: false });
+    document.addEventListener('touchend', this.docTouchEnd);
+  }
+
+  private removeTouchListeners(): void {
+    if (this.docTouchMove) { document.removeEventListener('touchmove', this.docTouchMove); this.docTouchMove = null; }
+    if (this.docTouchEnd)  { document.removeEventListener('touchend',  this.docTouchEnd);  this.docTouchEnd  = null; }
+  }
+
+  private onDocTouchMove(e: TouchEvent): void {
+    const ix = this.interact();
+    if (!ix) return;
+    e.preventDefault();
+
+    const touch = e.changedTouches[0];
+    const { colDate, offsetY } = this.hitTestTouch(touch);
+    if (colDate === null || offsetY === null) return;
+
+    const cursorMin = this.snapMinutes(this.yToMinutes(offsetY));
+    if (ix.kind === 'create') {
+      this.interact.set({ ...ix, colDate, endMin: Math.max(cursorMin, ix.startMin + SNAP_MIN), active: true });
+    } else if (ix.kind === 'move') {
+      const raw = cursorMin - ix.offsetMin;
+      const currentStart = Math.min(Math.max(0, this.snapMinutes(raw)), 24 * 60 - ix.durationMin);
+      this.interact.set({ ...ix, colDate, currentStart, active: true });
+    } else if (ix.kind === 'resize') {
+      if (ix.colDate !== colDate) return;
+      this.interact.set({ ...ix, endMin: Math.max(cursorMin, ix.startMin + SNAP_MIN), active: true });
+    }
+  }
+
+  private onDocTouchEnd(): void {
+    this.removeTouchListeners();
+    this.finaliseInteract();
+  }
+
+  /** Returns the grid-column date and Y offset within the grid at the given touch position. */
+  private hitTestTouch(touch: Touch): { colDate: string | null; offsetY: number | null } {
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!el) return { colDate: null, offsetY: null };
+    const gridBg = el.closest('.grid-bg') as HTMLElement | null;
+    if (!gridBg) return { colDate: null, offsetY: null };
+    const offsetY = touch.clientY - gridBg.getBoundingClientRect().top;
+    const dayEl = gridBg.closest('.day') as HTMLElement | null;
+    const calEl = dayEl?.closest('.cal') as HTMLElement | null;
+    if (!dayEl || !calEl) return { colDate: null, offsetY };
+    const dayIndex = Array.from(calEl.querySelectorAll('.day')).indexOf(dayEl);
+    const cols = this.columns();
+    return { colDate: dayIndex >= 0 && dayIndex < cols.length ? cols[dayIndex].date : null, offsetY };
+  }
+
+  ngOnDestroy(): void {
+    this.removeTouchListeners();
   }
 
   // ─── Dialog ─────────────────────────────────────────────────────────────────
