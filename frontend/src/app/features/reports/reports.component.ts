@@ -29,6 +29,11 @@ import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date
 
 const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'MONTH'];
 
+type DetailRow =
+  | { kind: 'header'; label: string }
+  | { kind: 'entry'; entry: TimeEntry }
+  | { kind: 'subtotal'; totalSeconds: number; revenueAmount: string };
+
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -188,15 +193,27 @@ const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'M
         <table class="table">
           <thead><tr><th>Datum</th><th>Projekt</th><th>Beschreibung</th><th>Zeit</th><th class="num">Dauer</th><th class="num">Betrag</th></tr></thead>
           <tbody>
-            @for (e of detailed()?.content ?? []; track e.id) {
-              <tr>
-                <td class="mono">{{ e.entryDate }}</td>
-                <td>{{ e.projectName }}@if (e.taskName) { <span class="faint"> · {{ e.taskName }}</span> }</td>
-                <td>{{ e.description || '—' }}</td>
-                <td class="mono faint">{{ time(e.startTime) }}–{{ time(e.endTime) }}</td>
-                <td class="num mono">{{ e.durationSeconds | duration: 'HH:MM' }}</td>
-                <td class="num mono">{{ e.amountSnapshot | money: e.currencyCodeSnapshot || 'EUR' }}</td>
-              </tr>
+            @for (r of detailedRows(); track $index) {
+              @if (r.kind === 'header') {
+                <tr class="group-hd-row">
+                  <td colspan="6"><strong>{{ r.label }}</strong></td>
+                </tr>
+              } @else if (r.kind === 'subtotal') {
+                <tr class="subtotal-row">
+                  <td colspan="4" class="faint" style="font-size: var(--fs-sm); text-align: right;">Zwischensumme</td>
+                  <td class="num mono">{{ r.totalSeconds | duration: 'HH:MM' }}</td>
+                  <td class="num mono">{{ r.revenueAmount | money }}</td>
+                </tr>
+              } @else {
+                <tr>
+                  <td class="mono">{{ r.entry.entryDate }}</td>
+                  <td>{{ r.entry.projectName }}@if (r.entry.taskName) { <span class="faint"> · {{ r.entry.taskName }}</span> }</td>
+                  <td>{{ r.entry.description || '—' }}</td>
+                  <td class="mono faint">{{ time(r.entry.startTime) }}–{{ time(r.entry.endTime) }}</td>
+                  <td class="num mono">{{ r.entry.durationSeconds | duration: 'HH:MM' }}</td>
+                  <td class="num mono">{{ r.entry.amountSnapshot | money: r.entry.currencyCodeSnapshot || 'EUR' }}</td>
+                </tr>
+              }
             }
           </tbody>
         </table>
@@ -215,6 +232,8 @@ const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'M
   styles: [`
     .filter-bar { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; position: sticky; top: 0; z-index: 5; }
     .filter-bar .field { margin: 0; min-width: 120px; }
+    .group-hd-row td { background: color-mix(in srgb, var(--brand) 6%, var(--surface)); border-top: 2px solid var(--border); padding: var(--sp-2) var(--sp-3) !important; }
+    .subtotal-row td { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); font-weight: 600; border-top: 1px dashed var(--border); }
     .heatmap-wrap { display: flex; gap: 4px; margin-top: var(--sp-3); align-items: flex-start; }
     .heatmap-days { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-faint); padding-top: 0; width: 24px; flex-shrink: 0; }
     .heatmap-days div { height: 12px; line-height: 12px; text-align: right; padding-right: 4px; }
@@ -246,6 +265,59 @@ export class ReportsComponent {
   protected readonly detailed = signal<PageResponse<TimeEntry> | null>(null);
   protected readonly granularity = signal<Granularity>('DAY');
   protected readonly page = signal(0);
+
+  protected readonly detailedRows = computed<DetailRow[]>(() => {
+    const page = this.detailed();
+    if (!page) return [];
+    const groupBy = this.f().groupBy ?? 'PROJECT';
+
+    const getKey = (e: TimeEntry): string => {
+      switch (groupBy) {
+        case 'PROJECT': return e.projectId;
+        case 'CLIENT':  return e.clientId ?? '__none__';
+        case 'TASK':    return e.taskId ?? '__none__';
+        case 'DAY':     return e.entryDate;
+        case 'WEEK':    return toIsoDate(startOfWeek(new Date(e.entryDate + 'T12:00:00')));
+        case 'MONTH':   return e.entryDate.slice(0, 7);
+      }
+    };
+
+    const getLabel = (e: TimeEntry): string => {
+      switch (groupBy) {
+        case 'PROJECT': return e.projectName;
+        case 'CLIENT':  return e.clientName ?? '(kein Kunde)';
+        case 'TASK':    return e.taskName ?? '(kein Task)';
+        case 'DAY':     return e.entryDate;
+        case 'WEEK':    return 'Woche ab ' + toIsoDate(startOfWeek(new Date(e.entryDate + 'T12:00:00')));
+        case 'MONTH':   return e.entryDate.slice(0, 7);
+      }
+    };
+
+    const rows: DetailRow[] = [];
+    let currentKey: string | null = null;
+    let subtotalSec = 0;
+    let subtotalRev = 0;
+
+    for (const e of page.content) {
+      const key = getKey(e);
+      if (key !== currentKey) {
+        if (currentKey !== null) {
+          rows.push({ kind: 'subtotal', totalSeconds: subtotalSec, revenueAmount: subtotalRev.toFixed(2) });
+        }
+        rows.push({ kind: 'header', label: getLabel(e) });
+        currentKey = key;
+        subtotalSec = 0;
+        subtotalRev = 0;
+      }
+      subtotalSec += e.durationSeconds;
+      subtotalRev += Number(e.amountSnapshot ?? 0);
+      rows.push({ kind: 'entry', entry: e });
+    }
+    if (currentKey !== null) {
+      rows.push({ kind: 'subtotal', totalSeconds: subtotalSec, revenueAmount: subtotalRev.toFixed(2) });
+    }
+    return rows;
+  });
   protected readonly heatmap = signal<HeatmapReport | null>(null);
   protected readonly heatmapYear = signal(new Date().getFullYear());
   protected readonly heatmapYears = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
