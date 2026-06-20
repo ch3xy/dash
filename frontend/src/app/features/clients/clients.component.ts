@@ -24,7 +24,7 @@ import { ToastService } from '../../core/toast.service';
       } @else if (clients().length === 0) {
         <div class="card state">Noch keine Kunden. Lege den ersten an.</div>
       } @else {
-        <div class="card">
+        <div class="card" style="overflow-x: auto;">
           <table class="table">
             <thead>
               <tr><th>Name</th><th>E-Mail</th><th>Währung</th><th>Status</th><th></th></tr>

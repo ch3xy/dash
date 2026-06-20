@@ -454,3 +454,47 @@ a:hover {
 }
 .toast.error { border-left-color: var(--danger); }
 .toast.success { border-left-color: var(--ok); }
+
+/* ---- Responsive 2-column grid ---- */
+.grid-2col { grid-template-columns: 1fr 1fr; }
+
+/* ============================================================
+   Responsive — iPhone 15+ (393 × 852 logical px)
+   Breakpoint ≤ 640 px
+   ============================================================ */
+@media (max-width: 640px) {
+  /* Reduce page chrome */
+  .page { padding: var(--sp-4); }
+  .page-header h1 { font-size: var(--fs-xl); }
+  .card-pad { padding: var(--sp-4); }
+
+  /* iOS Safari: inputs with font-size < 16 px auto-zoom on focus */
+  .input, .select, .textarea { font-size: var(--fs-lg); }
+
+  /* Apple HIG touch target minimum: 44 pt */
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 36px; }
+  .input, .select { height: 44px; }
+
+  /* Dialog → bottom sheet */
+  .dialog-backdrop { align-items: flex-end; padding: 0; }
+  .dialog {
+    max-width: 100%;
+    max-height: 92dvh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  /* Toast above bottom nav (56 px) */
+  .toast-host {
+    left: var(--sp-3);
+    right: var(--sp-3);
+    bottom: calc(56px + var(--sp-3));
+    align-items: stretch;
+  }
+  .toast { max-width: none; min-width: 0; }
+
+  /* Responsive grids */
+  .grid-2col { grid-template-columns: 1fr; }
+  .grid-cards { grid-template-columns: 1fr 1fr; } /* 2 per row on mobile */
+}

@@ -101,6 +101,22 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
     .si-meta { font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
     .si-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .search-empty { padding: var(--sp-3); color: var(--text-muted); font-size: var(--fs-sm); text-align: center; }
+
+    @media (max-width: 640px) {
+      /* Collapse to icon on mobile; expand on focus */
+      .search-input {
+        width: 36px; padding: 6px;
+        background: transparent; border-color: transparent; cursor: pointer;
+        transition: width 0.2s, background 0.2s, border-color 0.2s;
+      }
+      .search-input::placeholder { opacity: 0; }
+      .search-input:focus {
+        width: min(220px, 55vw);
+        background: var(--surface); border-color: var(--border);
+      }
+      .search-input:focus::placeholder { opacity: 1; }
+      .search-panel { left: auto; right: 0; min-width: min(320px, 92vw); }
+    }
   `],
 })
 export class GlobalSearchComponent {

@@ -46,7 +46,7 @@ import { timeOf } from '../../shared/utils/date-utils';
           </div>
         </div>
 
-        <div class="grid mt-4" style="grid-template-columns: 1fr 1fr;">
+        <div class="grid grid-2col mt-4">
           <div class="card card-pad">
             <div class="card-title">Budget-Warnungen</div>
             @if (d.budgetAlerts.length) {

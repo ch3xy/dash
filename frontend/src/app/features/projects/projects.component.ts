@@ -32,7 +32,7 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
       } @else if (projects().length === 0) {
         <div class="card state">Noch keine Projekte.</div>
       } @else {
-        <div class="card">
+        <div class="card" style="overflow-x: auto;">
           <table class="table">
             <thead>
               <tr><th>Projekt</th><th>Kunde</th><th>Status</th><th>Budget</th><th class="num">Satz</th><th></th></tr>

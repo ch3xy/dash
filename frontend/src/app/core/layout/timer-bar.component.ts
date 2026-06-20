@@ -86,12 +86,25 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
     </div>
   `,
   styles: [`
-    .timer-bar { display: flex; align-items: center; gap: var(--sp-2); flex: 1; max-width: 800px; }
-    .desc { flex: 1; min-width: 120px; }
+    .timer-bar { display: flex; align-items: center; gap: var(--sp-2); flex: 1; max-width: 800px; width: 100%; }
+    .desc { flex: 1; min-width: 100px; }
     .proj-select { width: 180px; }
     .task-select { width: 130px; }
     .proj { color: var(--text-muted); font-size: var(--fs-sm); white-space: nowrap; }
     .elapsed { font-size: var(--fs-lg); font-weight: 600; min-width: 70px; text-align: right; }
+
+    @media (max-width: 640px) {
+      .timer-bar { flex-wrap: wrap; max-width: none; gap: var(--sp-2); }
+      /* Row 1: description full-width */
+      .desc { order: 0; flex-basis: 100%; min-width: 0; }
+      /* Row 2: project select (grows), then task, then billable toggle, then start */
+      .proj-select { order: 1; flex: 1; width: auto; min-width: 0; }
+      .task-select { order: 2; flex: 1; width: auto; min-width: 0; }
+      .switch    { order: 3; flex-shrink: 0; }
+      .btn-primary { order: 4; flex-shrink: 0; }
+      /* Running mode: hide project label, keep elapsed + stop inline */
+      .proj { display: none; }
+    }
     .tag-wrap { position: relative; }
     .tag-btn { gap: 4px; }
     .tag-btn-active { color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }

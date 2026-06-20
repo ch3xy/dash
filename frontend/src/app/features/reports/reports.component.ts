@@ -90,7 +90,7 @@ type DetailRow =
           <div class="card card-pad"><div class="card-title">Umsatz</div><div class="stat-value mono">{{ s.revenueAmount | money: s.currencyCode }}</div></div>
         </div>
 
-        <div class="grid mt-4" style="grid-template-columns: 1fr 1fr;">
+        <div class="grid grid-2col mt-4">
           <div class="card card-pad">
             <div class="card-title">Nach {{ s.groupedBy }} — Zeit</div>
             <app-bar-chart [data]="groupBars(s)" />
@@ -163,8 +163,8 @@ type DetailRow =
 
       <!-- Budget -->
       @if (budget().length) {
-        <div class="card card-pad mt-4">
-          <div class="card-title">Projektbudgets</div>
+        <div class="card mt-4" style="overflow-x: auto;">
+          <div class="card-pad" style="border-bottom: 1px solid var(--border)"><div class="card-title" style="margin:0">Projektbudgets</div></div>
           <table class="table">
             <thead><tr><th>Projekt</th><th>Kunde</th><th class="num">Genutzt</th><th>Auslastung</th><th>Status</th></tr></thead>
             <tbody>
@@ -185,7 +185,7 @@ type DetailRow =
       }
 
       <!-- Detailed -->
-      <div class="card mt-4">
+      <div class="card mt-4" style="overflow-x: auto;">
         <div class="card-pad row-between">
           <div class="card-title" style="margin: 0">Detaillierte Einträge</div>
           @if (detailed(); as d) { <span class="muted">{{ d.totalElements }} Einträge</span> }
@@ -232,6 +232,10 @@ type DetailRow =
   styles: [`
     .filter-bar { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; position: sticky; top: 0; z-index: 5; }
     .filter-bar .field { margin: 0; min-width: 120px; }
+    @media (max-width: 640px) {
+      .filter-bar { position: static; gap: var(--sp-2); }
+      .filter-bar .field { flex: 1 1 calc(50% - var(--sp-2)); min-width: 130px; }
+    }
     .group-hd-row td { background: color-mix(in srgb, var(--brand) 6%, var(--surface)); border-top: 2px solid var(--border); padding: var(--sp-2) var(--sp-3) !important; }
     .subtotal-row td { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); font-weight: 600; border-top: 1px dashed var(--border); }
     .heatmap-wrap { display: flex; gap: 4px; margin-top: var(--sp-3); align-items: flex-start; }

@@ -75,14 +75,14 @@ interface EntryGroup {
       } @else if (entries().length === 0) {
         <div class="card state">Noch keine Einträge {{ viewDateLabel() === 'Heute' ? 'heute' : 'an diesem Tag' }}.</div>
       } @else {
-        <div class="card mt-4">
+        <div class="card mt-4" style="overflow-x: auto;">
           <table class="table">
             <thead>
               <tr>
                 <th></th>
                 <th>Beschreibung</th>
                 <th>Projekt</th>
-                <th>Zeit</th>
+                <th class="col-time">Zeit</th>
                 <th class="num">Dauer</th>
                 <th></th>
               </tr>
@@ -129,7 +129,7 @@ interface EntryGroup {
                     </span>
                     @if (g.taskName) { <span class="faint"> · {{ g.taskName }}</span> }
                   </td>
-                  <td class="mono faint">
+                  <td class="mono faint col-time">
                     @if (g.entries.length === 1) {
                       {{ time(g.entries[0].startTime) }}–{{ time(g.entries[0].endTime) }}
                     }
@@ -160,7 +160,7 @@ interface EntryGroup {
                         @if (!e.billable) { <span class="badge muted">nicht abrechenbar</span> }
                       </td>
                       <td></td>
-                      <td class="mono faint" style="font-size: var(--fs-sm);">
+                      <td class="mono faint col-time" style="font-size: var(--fs-sm);">
                         {{ time(e.startTime) }}–{{ time(e.endTime) }}
                       </td>
                       <td class="num mono" style="font-size: var(--fs-sm);">
@@ -267,6 +267,11 @@ interface EntryGroup {
     .sub-row td { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); padding-top: var(--sp-1) !important; padding-bottom: var(--sp-1) !important; }
     .sub-row:last-child td { border-bottom: 1px solid var(--border); }
     .text-link { cursor: text; }
+    @media (max-width: 640px) {
+      .col-time { display: none; }
+      /* Wrap action buttons to avoid overflow */
+      td:last-child { white-space: normal !important; }
+    }
   `],
 })
 export class TimerComponent {
