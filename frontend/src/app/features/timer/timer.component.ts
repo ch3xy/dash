@@ -13,7 +13,7 @@ import { TimerStateService } from '../../core/timer-state.service';
 import { AutofocusDirective } from '../../shared/directives/autofocus.directive';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
-import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
+import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils/date-utils';
 
 @Component({
   selector: 'app-timer',
@@ -23,6 +23,14 @@ import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
     <div class="page">
       <div class="page-header">
         <h1>Timer</h1>
+        <div class="row gap-2">
+          <button class="btn btn-sm" (click)="shiftDay(-1)">←</button>
+          <span class="mono" style="min-width: 100px; text-align: center;">
+            {{ viewDateLabel() }}
+          </span>
+          <button class="btn btn-sm" (click)="shiftDay(1)" [disabled]="viewDate() === todayIso">→</button>
+          <button class="btn btn-sm" (click)="goToday()" [disabled]="viewDate() === todayIso">Heute</button>
+        </div>
         <button class="btn btn-primary" (click)="openNew()">+ Eintrag</button>
       </div>
 
@@ -156,6 +164,16 @@ export class TimerComponent {
   private readonly shortcuts = inject(KeyboardShortcutService);
   private readonly dialog = inject(DialogService);
 
+  protected readonly todayIso = today();
+  protected readonly viewDate = signal(today());
+  protected readonly viewDateLabel = computed(() => {
+    const iso = this.viewDate();
+    if (iso === this.todayIso) return 'Heute';
+    const yesterday = toIsoDate(addDays(new Date(this.todayIso), -1));
+    if (iso === yesterday) return 'Gestern';
+    return new Date(iso + 'T12:00:00').toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  });
+
   protected readonly entries = signal<TimeEntry[]>([]);
   protected readonly projects = signal<Project[]>([]);
   protected readonly tasks = signal<Task[]>([]);
@@ -202,7 +220,7 @@ export class TimerComponent {
 
   load(): void {
     this.loading.set(true);
-    const d = today();
+    const d = this.viewDate();
     this.api.list({ from: d, to: d, size: 200 }).subscribe({
       next: (page) => {
         this.entries.set(page.content);
@@ -212,6 +230,18 @@ export class TimerComponent {
     });
   }
 
+  shiftDay(delta: number): void {
+    const next = toIsoDate(addDays(new Date(this.viewDate() + 'T12:00:00'), delta));
+    if (next > this.todayIso) return;
+    this.viewDate.set(next);
+    this.load();
+  }
+
+  goToday(): void {
+    this.viewDate.set(this.todayIso);
+    this.load();
+  }
+
   time(instant: string): string {
     return timeOf(instant);
   }
@@ -219,7 +249,7 @@ export class TimerComponent {
   openNew(): void {
     this.form = this.empty();
     this.editingId = null;
-    this.date = today();
+    this.date = this.viewDate();
     this.startTime = '09:00';
     this.endTime = '10:00';
     this.tasks.set([]);
