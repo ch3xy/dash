@@ -27,7 +27,7 @@ public class TimerController {
     )
     @GetMapping("/current")
     public ResponseEntity<TimerResponse> current() {
-        return ResponseEntity.ok(service.getCurrent());
+        return ResponseEntity.ok(service.findCurrent().orElse(null));
     }
 
     @Operation(
