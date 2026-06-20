@@ -15,6 +15,19 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils/date-utils';
 
+interface EntryGroup {
+  key: string;
+  projectId: string;
+  projectName: string;
+  projectColor: string | null;
+  taskId: string | null;
+  taskName: string | null;
+  description: string | null;
+  billable: boolean;
+  totalSeconds: number;
+  entries: TimeEntry[];
+}
+
 @Component({
   selector: 'app-timer',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,7 +49,7 @@ import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils
 
       <div class="card card-pad row-between">
         <div>
-          <div class="card-title" style="margin: 0">Heute gesamt</div>
+          <div class="card-title" style="margin: 0">{{ viewDateLabel() }} gesamt</div>
           <div class="stat-value">{{ totalSeconds() | duration: 'HH:MM' }}</div>
         </div>
         <div class="text-right">
@@ -60,44 +73,107 @@ import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils
       @if (loading()) {
         <div class="state"><div class="spinner"></div></div>
       } @else if (entries().length === 0) {
-        <div class="card state">Noch keine Einträge heute.</div>
+        <div class="card state">Noch keine Einträge {{ viewDateLabel() === 'Heute' ? 'heute' : 'an diesem Tag' }}.</div>
       } @else {
         <div class="card mt-4">
           <table class="table">
             <thead>
-              <tr><th>Beschreibung</th><th>Projekt</th><th>Zeit</th><th class="num">Dauer</th><th></th></tr>
+              <tr>
+                <th></th>
+                <th>Beschreibung</th>
+                <th>Projekt</th>
+                <th>Zeit</th>
+                <th class="num">Dauer</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
-              @for (e of entries(); track e.id) {
-                <tr>
+              @for (g of groupedEntries(); track g.key) {
+                <!-- Group header row -->
+                <tr class="group-row" [class.group-expanded]="expandedGroups().has(g.key)">
+                  <td class="expand-col">
+                    @if (g.entries.length > 1) {
+                      <button class="btn btn-ghost btn-icon btn-sm"
+                              (click)="toggleGroup(g.key)"
+                              title="{{ expandedGroups().has(g.key) ? 'Einklappen' : 'Aufklappen' }}">
+                        {{ expandedGroups().has(g.key) ? '▾' : '▸' }}
+                      </button>
+                    }
+                  </td>
                   <td>
-                    @if (editingDescId() === e.id) {
-                      <input class="input" [ngModel]="e.description ?? ''" appAutofocus
+                    @if (g.entries.length === 1 && editingDescId() === g.entries[0].id) {
+                      <input class="input" [ngModel]="g.description ?? ''" appAutofocus
                              (keydown.enter)="$any($event.target).blur()"
                              (keydown.escape)="editingDescId.set(null)"
-                             (blur)="saveDescription(e, $any($event.target).value)" />
+                             (blur)="saveDescription(g.entries[0], $any($event.target).value)" />
                     } @else {
-                      <span (click)="editingDescId.set(e.id)" title="Klicken zum Bearbeiten"
-                            style="cursor: text;">{{ e.description || '(keine Beschreibung)' }}</span>
-                      @if (!e.billable) { <span class="badge muted">nicht abrechenbar</span> }
-                      @for (t of e.tags; track t.id) {
+                      <span [class.text-link]="g.entries.length === 1"
+                            (click)="g.entries.length === 1 ? editingDescId.set(g.entries[0].id) : null"
+                            [title]="g.entries.length === 1 ? 'Klicken zum Bearbeiten' : ''"
+                            [style.cursor]="g.entries.length === 1 ? 'text' : 'default'">
+                        {{ g.description || '(keine Beschreibung)' }}
+                      </span>
+                      @if (g.entries.length > 1) {
+                        <span class="badge muted">{{ g.entries.length }}×</span>
+                      }
+                      @if (!g.billable) { <span class="badge muted">nicht abrechenbar</span> }
+                      @for (t of g.entries[0].tags; track t.id) {
                         <span class="badge" [style.color]="t.color || 'var(--text)'">{{ t.name }}</span>
                       }
                     }
                   </td>
                   <td>
-                    <span class="row gap-2"><span class="badge-dot" [style.background]="e.projectColor || 'var(--brand)'"></span>{{ e.projectName }}</span>
-                    @if (e.taskName) { <span class="faint"> · {{ e.taskName }}</span> }
+                    <span class="row gap-2">
+                      <span class="badge-dot" [style.background]="g.projectColor || 'var(--brand)'"></span>
+                      {{ g.projectName }}
+                    </span>
+                    @if (g.taskName) { <span class="faint"> · {{ g.taskName }}</span> }
                   </td>
-                  <td class="mono faint">{{ time(e.startTime) }}–{{ time(e.endTime) }}</td>
-                  <td class="num mono">{{ e.durationSeconds | duration: 'HH:MM' }}</td>
+                  <td class="mono faint">
+                    @if (g.entries.length === 1) {
+                      {{ time(g.entries[0].startTime) }}–{{ time(g.entries[0].endTime) }}
+                    }
+                  </td>
+                  <td class="num mono">{{ g.totalSeconds | duration: 'HH:MM' }}</td>
                   <td class="text-right" style="white-space: nowrap;">
-                    <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen">▶</button>
-                    <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren">⎘</button>
-                    <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten">✎</button>
-                    <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
+                    @if (g.entries.length === 1) {
+                      <button class="btn btn-ghost btn-sm" (click)="continueEntry(g.entries[0])" title="Fortsetzen">▶</button>
+                      <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren">⎘</button>
+                      <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten">✎</button>
+                      <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen">🗑</button>
+                    } @else {
+                      <button class="btn btn-ghost btn-sm" (click)="toggleGroup(g.key)"
+                              title="{{ expandedGroups().has(g.key) ? 'Einklappen' : 'Aufklappen' }}">
+                        {{ expandedGroups().has(g.key) ? 'Einklappen' : 'Details' }}
+                      </button>
+                    }
                   </td>
                 </tr>
+
+                <!-- Sub-rows when expanded -->
+                @if (g.entries.length > 1 && expandedGroups().has(g.key)) {
+                  @for (e of g.entries; track e.id) {
+                    <tr class="sub-row">
+                      <td></td>
+                      <td class="faint" style="font-size: var(--fs-sm);">
+                        @if (!e.billable) { <span class="badge muted">nicht abrechenbar</span> }
+                      </td>
+                      <td></td>
+                      <td class="mono faint" style="font-size: var(--fs-sm);">
+                        {{ time(e.startTime) }}–{{ time(e.endTime) }}
+                      </td>
+                      <td class="num mono" style="font-size: var(--fs-sm);">
+                        {{ e.durationSeconds | duration: 'HH:MM' }}
+                      </td>
+                      <td class="text-right" style="white-space: nowrap;">
+                        <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen">▶</button>
+                        <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren">⎘</button>
+                        <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten">✎</button>
+                        <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
+                      </td>
+                    </tr>
+                  }
+                }
               }
             </tbody>
           </table>
@@ -147,6 +223,9 @@ import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils
             <label class="switch"><input type="checkbox" [(ngModel)]="form.billable" /> Abrechenbar</label>
           </div>
           <div class="dialog-footer">
+            @if (editingId) {
+              <button class="btn btn-danger" style="margin-right: auto" (click)="removeById(editingId)">Löschen</button>
+            }
             <button class="btn" (click)="close()">Abbrechen</button>
             <button class="btn btn-primary" (click)="save()" [disabled]="!form.projectId">Speichern</button>
           </div>
@@ -154,6 +233,14 @@ import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils
       </div>
     }
   `,
+  styles: [`
+    .expand-col { width: 28px; padding: 0 !important; }
+    .group-row td { border-bottom: 1px solid var(--border); }
+    .group-expanded td { border-bottom: none; }
+    .sub-row td { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); padding-top: var(--sp-1) !important; padding-bottom: var(--sp-1) !important; }
+    .sub-row:last-child td { border-bottom: 1px solid var(--border); }
+    .text-link { cursor: text; }
+  `],
 })
 export class TimerComponent {
   private readonly api = inject(TimeEntryApiService);
@@ -183,6 +270,7 @@ export class TimerComponent {
   protected readonly loading = signal(true);
   protected readonly showDialog = signal(false);
   protected readonly editingDescId = signal<string | null>(null);
+  protected readonly expandedGroups = signal<Set<string>>(new Set());
 
   protected readonly totalSeconds = computed(() =>
     this.entries().reduce((s, e) => s + e.durationSeconds, 0),
@@ -192,6 +280,27 @@ export class TimerComponent {
       .reduce((s, e) => s + Number(e.amountSnapshot ?? 0), 0)
       .toFixed(2),
   );
+
+  protected readonly groupedEntries = computed<EntryGroup[]>(() => {
+    const map = new Map<string, EntryGroup>();
+    for (const e of this.entries()) {
+      const key = `${e.projectId}|${e.taskId ?? ''}|${e.description ?? ''}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.totalSeconds += e.durationSeconds;
+        existing.entries.push(e);
+      } else {
+        map.set(key, {
+          key,
+          projectId: e.projectId, projectName: e.projectName, projectColor: e.projectColor,
+          taskId: e.taskId, taskName: e.taskName,
+          description: e.description, billable: e.billable,
+          totalSeconds: e.durationSeconds, entries: [e],
+        });
+      }
+    }
+    return [...map.values()];
+  });
 
   protected editingId: string | null = null;
   protected date = today();
@@ -205,9 +314,7 @@ export class TimerComponent {
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
     this.shortcuts.commands$.pipe(takeUntilDestroyed()).subscribe((cmd) => {
-      if (cmd === 'new-entry') {
-        this.openNew();
-      }
+      if (cmd === 'new-entry') this.openNew();
     });
   }
 
@@ -223,10 +330,7 @@ export class TimerComponent {
     this.loading.set(true);
     const d = this.viewDate();
     this.api.list({ from: d, to: d, size: 200 }).subscribe({
-      next: (page) => {
-        this.entries.set(page.content);
-        this.loading.set(false);
-      },
+      next: (page) => { this.entries.set(page.content); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
   }
@@ -241,6 +345,14 @@ export class TimerComponent {
   goToday(): void {
     this.viewDate.set(this.todayIso);
     this.load();
+  }
+
+  toggleGroup(key: string): void {
+    this.expandedGroups.update((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   }
 
   time(instant: string): string {
@@ -276,9 +388,7 @@ export class TimerComponent {
   }
 
   onProjectChange(keepTask: string | null = null): void {
-    if (!keepTask) {
-      this.form.taskId = null;
-    }
+    if (!keepTask) this.form.taskId = null;
     this.tasks.set([]);
     if (this.form.projectId) {
       this.taskApi.getForProject(this.form.projectId).subscribe((t) => this.tasks.set(t));
@@ -295,9 +405,7 @@ export class TimerComponent {
   }
 
   save(): void {
-    if (!this.form.projectId) {
-      return;
-    }
+    if (!this.form.projectId) return;
     const payload: TimeEntryInput = {
       ...this.form,
       startTime: toInstant(this.date, this.startTime),
@@ -318,6 +426,20 @@ export class TimerComponent {
         if (ok) {
           this.api.delete(e.id).subscribe(() => {
             this.toast.success('Gelöscht');
+            this.load();
+          });
+        }
+      });
+  }
+
+  removeById(id: string): void {
+    this.dialog
+      .confirm({ title: 'Eintrag löschen', message: 'Diesen Zeiteintrag löschen?', confirmLabel: 'Löschen', danger: true })
+      .then((ok) => {
+        if (ok) {
+          this.api.delete(id).subscribe(() => {
+            this.toast.success('Gelöscht');
+            this.close();
             this.load();
           });
         }
@@ -348,9 +470,7 @@ export class TimerComponent {
   }
 
   startFromCombo(c: RecentCombination): void {
-    if (this.timerState.isRunning()) {
-      return;
-    }
+    if (this.timerState.isRunning()) return;
     this.timerState
       .start({ projectId: c.projectId, taskId: c.taskId, billable: c.billable ?? true })
       .subscribe(() => this.toast.success('Timer gestartet'));
@@ -359,17 +479,11 @@ export class TimerComponent {
   saveDescription(e: TimeEntry, value: string): void {
     this.editingDescId.set(null);
     const next = value.trim() || null;
-    if (next === (e.description ?? null)) {
-      return;
-    }
+    if (next === (e.description ?? null)) return;
     this.api
       .update(e.id, {
-        projectId: e.projectId,
-        taskId: e.taskId,
-        description: next,
-        startTime: e.startTime,
-        endTime: e.endTime,
-        billable: e.billable,
+        projectId: e.projectId, taskId: e.taskId, description: next,
+        startTime: e.startTime, endTime: e.endTime, billable: e.billable,
         tagIds: e.tags.map((t) => t.id),
       })
       .subscribe(() => {
