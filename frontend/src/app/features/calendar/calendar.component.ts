@@ -24,6 +24,8 @@ interface Block {
   entry: TimeEntry;
   top: number;
   height: number;
+  col: number;
+  totalCols: number;
 }
 
 interface DayColumn {
@@ -32,12 +34,11 @@ interface DayColumn {
   blocks: Block[];
 }
 
-interface DragState {
-  colDate: string;
-  startMin: number;
-  endMin: number;
-  dragging: boolean;
-}
+/** Discriminated union covering all three interaction modes. */
+type Interact =
+  | { kind: 'create'; colDate: string; startMin: number; endMin: number; active: boolean }
+  | { kind: 'move';   entry: TimeEntry; colDate: string; offsetMin: number; currentStart: number; durationMin: number; active: boolean }
+  | { kind: 'resize'; entry: TimeEntry; colDate: string; startMin: number; endMin: number; active: boolean };
 
 @Component({
   selector: 'app-calendar',
@@ -59,13 +60,17 @@ interface DragState {
         <div class="state"><div class="spinner"></div></div>
       } @else {
         <div class="card" style="overflow: auto;">
-          <div class="cal" [class.selecting]="drag()?.dragging">
+          <div class="cal"
+               [class.creating]="interact()?.kind === 'create' && interact()?.active"
+               [class.moving]="interact()?.kind === 'move' && interact()?.active"
+               [class.resizing]="interact()?.kind === 'resize'">
             <div class="hours">
               <div class="hd"></div>
               @for (h of hours; track h) {
                 <div class="hour-label" [style.height.px]="hourPx">{{ h }}:00</div>
               }
             </div>
+
             @for (col of columns(); track col.date) {
               <div class="day" [class.today-col]="col.date === todayIso">
                 <div class="hd" [class.today-hd]="col.date === todayIso">{{ col.label }}</div>
@@ -73,36 +78,41 @@ interface DragState {
                      (mousedown)="onGridMouseDown($event, col.date)"
                      (mousemove)="onGridMouseMove($event, col.date)"
                      (mouseup)="onGridMouseUp()">
+
+                  <!-- Hour + half-hour lines -->
                   @for (h of hours; track h) {
                     <div class="hline" [style.top.px]="h * hourPx"></div>
                     <div class="hline hline-half" [style.top.px]="h * hourPx + hourPx / 2"></div>
                   }
-                  <!-- Current time indicator (today column only) -->
+
+                  <!-- Current time indicator -->
                   @if (col.date === todayIso) {
                     <div class="now-line" [style.top.px]="nowTop()">
                       <div class="now-dot"></div>
                     </div>
                   }
-                  <!-- Ghost block while dragging -->
-                  @if (drag(); as d) {
-                    @if (d.dragging && d.colDate === col.date) {
-                      <div class="ghost-block"
-                           [style.top.px]="ghostTop(d)"
-                           [style.height.px]="ghostHeight(d)">
-                        <span class="mono ghost-label">{{ ghostLabel(d) }}</span>
-                      </div>
-                    }
+
+                  <!-- Ghost block (create / move / resize) -->
+                  @if (ghostForCol(col.date); as g) {
+                    <div class="ghost-block"
+                         [style.top.px]="g.top"
+                         [style.height.px]="g.height">
+                      <span class="mono ghost-label">{{ g.label }}</span>
+                    </div>
                   }
+
                   <!-- Existing entries -->
                   @for (b of col.blocks; track b.entry.id) {
                     <div class="block"
+                         [class.block-dim]="isInteracting(b.entry.id)"
                          [style.top.px]="b.top"
                          [style.height.px]="b.height"
+                         [style.left]="blockLeft(b)"
+                         [style.width]="blockWidth(b)"
                          [style.border-left-color]="b.entry.projectColor || 'var(--brand)'"
                          [style.background]="(b.entry.projectColor || 'var(--brand)') + '22'"
-                         [title]="(b.entry.description || b.entry.projectName) + ' · ' + (b.entry.durationSeconds | duration: 'HH:MM')"
-                         (mousedown)="$event.stopPropagation()"
-                         (click)="editEntry(b.entry)">
+                         (mousedown)="onBlockMouseDown($event, b.entry)"
+                         (click)="onBlockClick($event, b.entry)">
                       <div class="b-proj">{{ b.entry.projectName }}</div>
                       @if (b.entry.description && b.height > 30) {
                         <div class="b-desc">{{ b.entry.description }}</div>
@@ -110,6 +120,8 @@ interface DragState {
                       @if (b.height > 22) {
                         <div class="b-dur mono">{{ b.entry.durationSeconds | duration: 'HH:MM' }}</div>
                       }
+                      <div class="resize-handle"
+                           (mousedown)="onResizeMouseDown($event, b.entry, col.date)"></div>
                     </div>
                   }
                 </div>
@@ -200,31 +212,36 @@ interface DragState {
   `,
   styles: [`
     .cal { display: flex; min-width: 760px; user-select: none; }
-    .cal.selecting { cursor: crosshair; }
+    .cal.creating { cursor: crosshair; }
+    .cal.moving   { cursor: grabbing; }
+    .cal.resizing { cursor: ns-resize; }
     .hours { width: 52px; flex-shrink: 0; }
-    .day { flex: 1; border-left: 1px solid var(--border); }
+    .day { flex: 1; border-left: 1px solid var(--border); min-width: 0; }
+    .today-col { background: color-mix(in srgb, var(--brand) 4%, transparent); }
     .hd { height: 36px; display: flex; align-items: center; justify-content: center;
           font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--border);
           position: sticky; top: 0; background: var(--surface); z-index: 2; }
+    .today-hd { color: var(--brand); font-weight: 700; }
     .hour-label { font-size: var(--fs-xs); color: var(--text-faint); text-align: right;
                   padding-right: var(--sp-2); box-sizing: border-box; }
     .grid-bg { position: relative; cursor: crosshair; }
-    .today-col { background: color-mix(in srgb, var(--brand) 4%, transparent); }
-    .today-hd { color: var(--brand); font-weight: 700; }
     .hline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); opacity: 0.5; }
     .hline-half { border-top-style: dashed; opacity: 0.25; }
     .now-line { position: absolute; left: 0; right: 0; border-top: 2px solid #e53e3e; z-index: 3; pointer-events: none; }
     .now-dot { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #e53e3e; }
-    .block { position: absolute; left: 3px; right: 3px;
-             background: var(--brand-soft); border-left: 3px solid var(--brand);
-             border-radius: var(--radius-sm); padding: 2px 4px; overflow: hidden;
-             font-size: var(--fs-xs); cursor: pointer; z-index: 1;
-             transition: filter 0.1s; }
+    .block { position: absolute;
+             border-left: 3px solid var(--brand);
+             border-radius: var(--radius-sm); padding: 2px 4px 10px; overflow: hidden;
+             font-size: var(--fs-xs); cursor: grab; z-index: 1; transition: opacity 0.1s; box-sizing: border-box; }
     .block:hover { filter: brightness(0.93); }
+    .block-dim { opacity: 0.35; pointer-events: none; }
     .b-proj { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
     .b-desc { color: var(--text-muted); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-    .b-dur { color: var(--text-muted); }
-    .ghost-block { position: absolute; left: 3px; right: 3px; z-index: 2;
+    .b-dur  { color: var(--text-muted); }
+    .resize-handle { position: absolute; bottom: 0; left: 0; right: 0; height: 8px;
+                     cursor: ns-resize; display: flex; align-items: center; justify-content: center; }
+    .resize-handle::after { content: ''; width: 20px; height: 2px; background: currentColor; opacity: 0.3; border-radius: 1px; }
+    .ghost-block { position: absolute; left: 2px; right: 2px; z-index: 2;
                    background: color-mix(in srgb, var(--brand) 18%, transparent);
                    border: 2px dashed var(--brand); border-radius: var(--radius-sm);
                    pointer-events: none; padding: 2px 4px; }
@@ -246,9 +263,9 @@ export class CalendarComponent {
   protected readonly todayIso = toIsoDate(new Date());
   private readonly nowMinutes = signal(this.currentMinutes());
 
-
   private readonly entries = signal<TimeEntry[]>([]);
-  protected readonly drag = signal<DragState | null>(null);
+  protected readonly interact = signal<Interact | null>(null);
+  private lastDragActive = false;
 
   protected readonly projects = signal<Project[]>([]);
   protected readonly tasks = signal<Task[]>([]);
@@ -271,19 +288,19 @@ export class CalendarComponent {
     for (let i = 0; i < 7; i++) {
       const date = addDays(this.weekStart, i);
       const iso = toIsoDate(date);
-      const blocks: Block[] = this.entries()
+      const raw = this.entries()
         .filter((e) => e.entryDate === iso)
         .map((e) => {
           const start = new Date(e.startTime);
-          const minutes = start.getHours() * 60 + start.getMinutes();
-          const top = (minutes / 60) * HOUR_PX;
+          const startMin = start.getHours() * 60 + start.getMinutes();
+          const top = (startMin / 60) * HOUR_PX;
           const height = Math.max(HOUR_PX * 0.25, (e.durationSeconds / 3600) * HOUR_PX);
-          return { entry: e, top, height };
+          return { entry: e, top, height, endMin: startMin + Math.round(e.durationSeconds / 60) };
         });
       cols.push({
         date: iso,
         label: date.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' }),
-        blocks,
+        blocks: this.layoutBlocks(raw),
       });
     }
     return cols;
@@ -310,72 +327,149 @@ export class CalendarComponent {
     const from = toIsoDate(this.weekStart);
     const to = toIsoDate(addDays(this.weekStart, 6));
     this.api.list({ from, to, size: 500 }).subscribe({
-      next: (page) => {
-        this.entries.set(page.content);
-        this.loading.set(false);
-      },
+      next: (page) => { this.entries.set(page.content); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
   }
 
-  shift(days: number): void {
-    this.weekStart = addDays(this.weekStart, days);
-    this.load();
+  shift(days: number): void { this.weekStart = addDays(this.weekStart, days); this.load(); }
+  goToday(): void { this.weekStart = startOfWeek(new Date()); this.load(); }
+
+  // ─── Block layout (overlap columns) ────────────────────────────────────────
+
+  private layoutBlocks(
+    raw: Array<{ entry: TimeEntry; top: number; height: number; endMin: number }>
+  ): Block[] {
+    if (!raw.length) return [];
+    const sorted = [...raw].sort((a, b) => a.top - b.top);
+    const colEnds: number[] = [];
+    const assigned: number[] = [];
+    for (const b of sorted) {
+      const startMin = (b.top / HOUR_PX) * 60;
+      let col = colEnds.findIndex((end) => end <= startMin);
+      if (col === -1) { col = colEnds.length; colEnds.push(0); }
+      colEnds[col] = b.endMin;
+      assigned.push(col);
+    }
+    const totalCols = colEnds.length;
+    return sorted.map((b, i) => ({ ...b, col: assigned[i], totalCols }));
   }
 
-  goToday(): void {
-    this.weekStart = startOfWeek(new Date());
-    this.load();
+  protected blockLeft(b: Block): string {
+    return `calc(2px + ${(b.col / b.totalCols) * 100}%)`;
   }
 
-  // ─── Drag-to-create ─────────────────────────────────────────────────────
+  protected blockWidth(b: Block): string {
+    return `calc(${100 / b.totalCols}% - 4px)`;
+  }
+
+  protected isInteracting(entryId: string): boolean {
+    const ix = this.interact();
+    if (!ix || ix.kind === 'create') return false;
+    return ix.entry.id === entryId && ix.active;
+  }
+
+  // ─── Ghost block ───────────────────────────────────────────────────────────
+
+  protected ghostForCol(colDate: string): { top: number; height: number; label: string } | null {
+    const ix = this.interact();
+    if (!ix || !ix.active) return null;
+    let startMin: number, endMin: number;
+    if (ix.kind === 'create') {
+      if (ix.colDate !== colDate) return null;
+      startMin = ix.startMin; endMin = ix.endMin;
+    } else if (ix.kind === 'move') {
+      if (ix.colDate !== colDate) return null;
+      startMin = ix.currentStart; endMin = ix.currentStart + ix.durationMin;
+    } else {
+      if (ix.colDate !== colDate) return null;
+      startMin = ix.startMin; endMin = ix.endMin;
+    }
+    return {
+      top: (startMin / 60) * HOUR_PX,
+      height: Math.max(HOUR_PX * 0.25, ((endMin - startMin) / 60) * HOUR_PX),
+      label: `${this.minutesToTime(startMin)} – ${this.minutesToTime(endMin)}`,
+    };
+  }
+
+  // ─── Grid mouse events ──────────────────────────────────────────────────────
 
   protected onGridMouseDown(e: MouseEvent, date: string): void {
     if (e.button !== 0) return;
     const startMin = this.snapMinutes(this.yToMinutes(e.offsetY));
-    this.drag.set({ colDate: date, startMin, endMin: startMin + SNAP_MIN, dragging: false });
+    this.interact.set({ kind: 'create', colDate: date, startMin, endMin: startMin + SNAP_MIN, active: false });
   }
 
-  protected onGridMouseMove(e: MouseEvent, date: string): void {
-    const d = this.drag();
-    if (!d || d.colDate !== date) return;
-    const rawMin = this.snapMinutes(this.yToMinutes(e.offsetY));
-    const endMin = Math.max(rawMin, d.startMin + SNAP_MIN);
-    this.drag.set({ ...d, endMin, dragging: true });
+  protected onGridMouseMove(e: MouseEvent, colDate: string): void {
+    const ix = this.interact();
+    if (!ix) return;
+    const cursorMin = this.snapMinutes(this.yToMinutes(e.offsetY));
+    if (ix.kind === 'create') {
+      this.interact.set({ ...ix, colDate, endMin: Math.max(cursorMin, ix.startMin + SNAP_MIN), active: true });
+    } else if (ix.kind === 'move') {
+      const raw = cursorMin - ix.offsetMin;
+      const currentStart = Math.min(Math.max(0, this.snapMinutes(raw)), 24 * 60 - ix.durationMin);
+      this.interact.set({ ...ix, colDate, currentStart, active: true });
+    } else if (ix.kind === 'resize') {
+      if (ix.colDate !== colDate) return;
+      this.interact.set({ ...ix, endMin: Math.max(cursorMin, ix.startMin + SNAP_MIN), active: true });
+    }
   }
 
   protected onGridMouseUp(): void {
-    const d = this.drag();
-    this.drag.set(null);
-    if (d?.dragging) {
-      this.openNewEntry(d.colDate, d.startMin, d.endMin);
-    }
+    this.finaliseInteract();
   }
 
-  // Catches mouseup outside the grid column so dragging to a column edge still opens the dialog.
   @HostListener('window:mouseup')
   onWindowMouseUp(): void {
-    const d = this.drag();
-    if (!d) return; // already handled by onGridMouseUp
-    this.drag.set(null);
-    if (d.dragging) {
-      this.openNewEntry(d.colDate, d.startMin, d.endMin);
+    if (this.interact()) this.finaliseInteract();
+  }
+
+  private finaliseInteract(): void {
+    const ix = this.interact();
+    this.lastDragActive = ix?.active ?? false;
+    this.interact.set(null);
+    if (!ix || !ix.active) return;
+
+    if (ix.kind === 'create') {
+      this.openNewEntry(ix.colDate, ix.startMin, ix.endMin);
+    } else if (ix.kind === 'move') {
+      this.patchEntry(ix.entry, ix.colDate, ix.currentStart, ix.currentStart + ix.durationMin);
+    } else if (ix.kind === 'resize') {
+      this.patchEntry(ix.entry, ix.colDate, ix.startMin, ix.endMin);
     }
   }
 
-  protected ghostTop(d: DragState): number {
-    return (d.startMin / 60) * HOUR_PX;
+  // ─── Block mouse events ─────────────────────────────────────────────────────
+
+  protected onBlockMouseDown(e: MouseEvent, entry: TimeEntry): void {
+    if (e.button !== 0) return;
+    const blockTop = (e.currentTarget as HTMLElement).getBoundingClientRect().top;
+    const offsetMin = Math.round(((e.clientY - blockTop) / HOUR_PX) * 60);
+    const currentStart = this.entryStartMin(entry);
+    const durationMin = Math.round(entry.durationSeconds / 60);
+    this.interact.set({ kind: 'move', entry, colDate: entry.entryDate, offsetMin, currentStart, durationMin, active: false });
+    e.stopPropagation();
   }
 
-  protected ghostHeight(d: DragState): number {
-    return ((d.endMin - d.startMin) / 60) * HOUR_PX;
+  protected onBlockClick(e: MouseEvent, entry: TimeEntry): void {
+    // window:mouseup fires before click; check flag instead of interact() which is already null
+    if (!this.lastDragActive) {
+      this.editEntry(entry);
+    }
+    this.lastDragActive = false;
+    e.stopPropagation();
   }
 
-  protected ghostLabel(d: DragState): string {
-    return `${this.minutesToTime(d.startMin)} – ${this.minutesToTime(d.endMin)}`;
+  protected onResizeMouseDown(e: MouseEvent, entry: TimeEntry, colDate: string): void {
+    if (e.button !== 0) return;
+    const startMin = this.entryStartMin(entry);
+    const endMin = startMin + Math.round(entry.durationSeconds / 60);
+    this.interact.set({ kind: 'resize', entry, colDate, startMin, endMin, active: false });
+    e.stopPropagation();
   }
 
-  // ─── Dialog ─────────────────────────────────────────────────────────────
+  // ─── Dialog ─────────────────────────────────────────────────────────────────
 
   private openNewEntry(date: string, startMin: number, endMin: number): void {
     this.form = this.emptyForm();
@@ -440,22 +534,18 @@ export class CalendarComponent {
   protected removeEntry(): void {
     const id = this.editingId();
     if (!id) return;
-    this.dialogSvc
-      .confirm({
-        title: 'Eintrag löschen',
-        message: 'Diesen Zeiteintrag löschen?',
-        confirmLabel: 'Löschen',
-        danger: true,
-      })
-      .then((ok) => {
-        if (ok) {
-          this.api.delete(id).subscribe(() => {
-            this.toast.success('Gelöscht');
-            this.closeDialog();
-            this.load();
-          });
-        }
-      });
+    this.dialogSvc.confirm({
+      title: 'Eintrag löschen', message: 'Diesen Zeiteintrag löschen?',
+      confirmLabel: 'Löschen', danger: true,
+    }).then((ok) => {
+      if (ok) {
+        this.api.delete(id).subscribe(() => {
+          this.toast.success('Gelöscht');
+          this.closeDialog();
+          this.load();
+        });
+      }
+    });
   }
 
   protected closeDialog(): void {
@@ -463,7 +553,30 @@ export class CalendarComponent {
     this.editingId.set(null);
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────
+  // ─── Patch helper ───────────────────────────────────────────────────────────
+
+  private patchEntry(entry: TimeEntry, colDate: string, startMin: number, endMin: number): void {
+    const payload: TimeEntryInput = {
+      projectId: entry.projectId,
+      taskId: entry.taskId,
+      description: entry.description,
+      billable: entry.billable,
+      tagIds: entry.tags.map((t) => t.id),
+      startTime: toInstant(colDate, this.minutesToTime(startMin)),
+      endTime: toInstant(colDate, this.minutesToTime(endMin)),
+    };
+    this.api.update(entry.id, payload).subscribe(() => {
+      this.toast.success('Aktualisiert');
+      this.load();
+    });
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  private entryStartMin(entry: TimeEntry): number {
+    const d = new Date(entry.startTime);
+    return d.getHours() * 60 + d.getMinutes();
+  }
 
   private yToMinutes(y: number): number {
     return (y / HOUR_PX) * 60;
