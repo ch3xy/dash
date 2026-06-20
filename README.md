@@ -27,7 +27,8 @@ docker compose up -d
 ./mvnw spring-boot:run
 ```
 
-Health-Check: <http://localhost:8080/api/v1/health>
+Health-Check: <http://localhost:8080/api/v1/health>  
+API-Doku (Swagger UI): <http://localhost:8080/swagger-ui/index.html> · OpenAPI-Spec: `/v3/api-docs`
 
 ### 3. Frontend (Port 4200)
 
