@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { TimerStateService } from './timer-state.service';
 
-export type ShortcutCommand = 'new-entry' | 'focus-timer';
+export type ShortcutCommand = 'new-entry' | 'focus-timer' | 'focus-search';
 
 /**
  * Global keyboard shortcuts:
@@ -37,9 +37,12 @@ export class KeyboardShortcutService {
         this.commands.next('new-entry');
         break;
       case 't':
-      case '/':
         e.preventDefault();
         this.commands.next('focus-timer');
+        break;
+      case '/':
+        e.preventDefault();
+        this.commands.next('focus-search');
         break;
       case 's':
         e.preventDefault();

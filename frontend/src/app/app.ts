@@ -3,6 +3,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { KeyboardShortcutService } from './core/keyboard-shortcut.service';
 import { ThemeService } from './core/theme.service';
 import { DialogHostComponent } from './core/layout/dialog-host.component';
+import { GlobalSearchComponent } from './core/layout/global-search.component';
 import { TimerBarComponent } from './core/layout/timer-bar.component';
 import { ToastHostComponent } from './core/layout/toast-host.component';
 
@@ -20,6 +21,7 @@ interface NavItem {
     RouterLink,
     RouterLinkActive,
     TimerBarComponent,
+    GlobalSearchComponent,
     ToastHostComponent,
     DialogHostComponent,
   ],
@@ -44,6 +46,7 @@ interface NavItem {
       <div class="main">
         <header class="topbar">
           <app-timer-bar />
+          <app-global-search (click)="$event.stopPropagation()" />
           <button class="btn btn-ghost btn-icon" (click)="theme.toggle()" title="Theme wechseln">
             {{ theme.theme() === 'dark' ? '☀' : '☾' }}
           </button>
