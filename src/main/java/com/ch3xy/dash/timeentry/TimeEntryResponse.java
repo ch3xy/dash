@@ -14,7 +14,7 @@ import java.util.UUID;
 
 public record TimeEntryResponse(
         UUID id,
-        UUID projectId, String projectName,
+        UUID projectId, String projectName, String projectColor,
         UUID clientId, String clientName,
         UUID taskId, String taskName,
         String description,
@@ -39,7 +39,7 @@ public record TimeEntryResponse(
                 .toList();
         return new TimeEntryResponse(
                 te.getId(),
-                project.getId(), project.getName(),
+                project.getId(), project.getName(), project.getColor(),
                 client != null ? client.getId() : null,
                 client != null ? client.getName() : null,
                 task != null ? task.getId() : null,

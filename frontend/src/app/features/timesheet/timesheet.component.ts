@@ -12,6 +12,7 @@ import { addDays, startOfWeek, toInstant, toIsoDate } from '../../shared/utils/d
 interface Row {
   projectId: string;
   projectName: string;
+  projectColor: string | null;
   /** date -> seconds */
   byDate: Record<string, number>;
 }
@@ -49,7 +50,12 @@ interface Row {
             <tbody>
               @for (row of rows(); track row.projectId) {
                 <tr>
-                  <td><strong>{{ row.projectName }}</strong></td>
+                  <td>
+                    <span class="row gap-2">
+                      <span class="badge-dot" [style.background]="row.projectColor || 'var(--brand)'"></span>
+                      <strong>{{ row.projectName }}</strong>
+                    </span>
+                  </td>
                   @for (d of r.days; track d.date) {
                     <td class="num cell" (click)="addTime(row, d.date)">
                       {{ row.byDate[d.date] ? (row.byDate[d.date] | duration: 'HH:MM') : '·' }}
@@ -113,7 +119,7 @@ export class TimesheetComponent {
       for (const e of day.entries) {
         let row = map.get(e.projectId);
         if (!row) {
-          row = { projectId: e.projectId, projectName: e.projectName, byDate: {} };
+          row = { projectId: e.projectId, projectName: e.projectName, projectColor: e.projectColor, byDate: {} };
           map.set(e.projectId, row);
         }
         row.byDate[day.date] = (row.byDate[day.date] ?? 0) + e.durationSeconds;
@@ -123,7 +129,7 @@ export class TimesheetComponent {
       if (!map.has(pid)) {
         const p = this.projects().find((x) => x.id === pid);
         if (p) {
-          map.set(pid, { projectId: pid, projectName: p.name, byDate: {} });
+          map.set(pid, { projectId: pid, projectName: p.name, projectColor: p.color ?? null, byDate: {} });
         }
       }
     }

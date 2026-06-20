@@ -83,7 +83,10 @@ import { MoneyPipe } from '../../shared/pipes/money.pipe';
             @for (p of d.topProjects; track p.projectId) {
               <div style="padding: var(--sp-2) 0;">
                 <div class="row-between" style="margin-bottom: var(--sp-1)">
-                  <a [routerLink]="['/projects', p.projectId]">{{ p.projectName }}</a>
+                  <span class="row gap-2">
+                    <span class="badge-dot" [style.background]="p.color || 'var(--brand)'"></span>
+                    <a [routerLink]="['/projects', p.projectId]">{{ p.projectName }}</a>
+                  </span>
                   <span class="mono">{{ p.durationSeconds | duration: 'HH:MM' }}</span>
                 </div>
                 <div class="progress"><span [style.width.%]="barWidth(p.durationSeconds, d)"></span></div>

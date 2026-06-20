@@ -91,6 +91,8 @@ interface DragState {
                     <div class="block"
                          [style.top.px]="b.top"
                          [style.height.px]="b.height"
+                         [style.border-left-color]="b.entry.projectColor || 'var(--brand)'"
+                         [style.background]="(b.entry.projectColor || 'var(--brand)') + '22'"
                          [title]="(b.entry.description || b.entry.projectName) + ' · ' + (b.entry.durationSeconds | duration: 'HH:MM')"
                          (mousedown)="$event.stopPropagation()"
                          (click)="editEntry(b.entry)">

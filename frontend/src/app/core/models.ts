@@ -131,6 +131,7 @@ export interface TimeEntry {
   id: Uuid;
   projectId: Uuid;
   projectName: string;
+  projectColor: string | null;
   clientId: Uuid | null;
   clientName: string | null;
   taskId: Uuid | null;
@@ -293,6 +294,7 @@ export interface BudgetAlert {
 export interface TopProject {
   projectId: Uuid;
   projectName: string;
+  color: string | null;
   durationSeconds: number;
 }
 

@@ -78,7 +78,7 @@ import { timeOf, toInstant, today } from '../../shared/utils/date-utils';
                     }
                   </td>
                   <td>
-                    <span class="row gap-2"><span class="badge-dot" [style.background]="'var(--brand)'"></span>{{ e.projectName }}</span>
+                    <span class="row gap-2"><span class="badge-dot" [style.background]="e.projectColor || 'var(--brand)'"></span>{{ e.projectName }}</span>
                     @if (e.taskName) { <span class="faint"> · {{ e.taskName }}</span> }
                   </td>
                   <td class="mono faint">{{ time(e.startTime) }}–{{ time(e.endTime) }}</td>
