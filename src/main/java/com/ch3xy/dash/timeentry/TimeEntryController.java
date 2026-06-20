@@ -153,4 +153,22 @@ public class TimeEntryController {
             @Parameter(description = "UUID des Zeiteintrags, der als Vorlage verwendet werden soll") @PathVariable UUID id) {
         return ResponseEntity.status(201).body(timerService.continueFrom(id));
     }
+
+    @Operation(
+            summary = "Zeiteintrag aufteilen",
+            description = "Teilt einen Zeiteintrag an einem bestimmten Zeitpunkt in zwei Einträge auf. Der ursprüngliche Eintrag wird gelöscht. Projekt, Task, Tags und Beschreibung werden auf beide Teile übertragen."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Zwei neue Einträge wurden erstellt"),
+            @ApiResponse(responseCode = "400", description = "splitAt liegt außerhalb des Eintragszeitraums"),
+            @ApiResponse(responseCode = "404", description = "Zeiteintrag nicht gefunden")
+    })
+    @PostMapping("/{id}/split")
+    public ResponseEntity<List<TimeEntryResponse>> split(
+            @PathVariable UUID id,
+            @Valid @RequestBody SplitRequest req) {
+        return ResponseEntity.ok(service.split(id, req.splitAt()));
+    }
+
+    record SplitRequest(@jakarta.validation.constraints.NotNull java.time.Instant splitAt) {}
 }

@@ -59,6 +59,10 @@ export class TimeEntryApiService {
     return this.http.post(`/time-entries/${id}/continue`, {});
   }
 
+  split(id: Uuid, splitAt: string): Observable<TimeEntry[]> {
+    return this.http.post<TimeEntry[]>(`/time-entries/${id}/split`, { splitAt });
+  }
+
   recentCombinations(limit = 5): Observable<RecentCombination[]> {
     return this.http.get<RecentCombination[]>('/time-entries/recent-combinations', {
       params: toParams({ limit }),

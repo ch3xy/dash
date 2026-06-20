@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -136,6 +137,24 @@ public class TimeEntryService {
     public void delete(UUID id) {
         TimeEntry entry = require(id);
         repository.delete(entry);
+    }
+
+    @Transactional
+    public List<TimeEntryResponse> split(UUID id, Instant splitAt) {
+        TimeEntry original = require(id);
+        if (!splitAt.isAfter(original.getStartTime()) || !splitAt.isBefore(original.getEndTime())) {
+            throw new IllegalArgumentException("splitAt must be strictly between startTime and endTime");
+        }
+        Set<UUID> tagIds = original.getTags().stream().map(Tag::getId).collect(Collectors.toSet());
+        UUID projectId = original.getProject().getId();
+        UUID taskId = original.getTask() != null ? original.getTask().getId() : null;
+        TimeEntryRequest req1 = new TimeEntryRequest(projectId, taskId, original.getDescription(),
+                original.getStartTime(), splitAt, original.isBillable(), tagIds);
+        TimeEntryRequest req2 = new TimeEntryRequest(projectId, taskId, original.getDescription(),
+                splitAt, original.getEndTime(), original.isBillable(), tagIds);
+        repository.delete(original);
+        repository.flush();
+        return List.of(create(req1, TimeEntrySource.ADJUSTMENT), create(req2, TimeEntrySource.ADJUSTMENT));
     }
 
     /**

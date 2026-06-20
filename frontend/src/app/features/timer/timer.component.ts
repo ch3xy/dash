@@ -139,6 +139,7 @@ interface EntryGroup {
                     @if (g.entries.length === 1) {
                       <button class="btn btn-ghost btn-sm" (click)="continueEntry(g.entries[0])" title="Fortsetzen">▶</button>
                       <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren">⎘</button>
+                      <button class="btn btn-ghost btn-sm" (click)="openSplit(g.entries[0])" title="Aufteilen">⚡</button>
                       <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten">✎</button>
                       <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen">🗑</button>
                     } @else {
@@ -168,6 +169,7 @@ interface EntryGroup {
                       <td class="text-right" style="white-space: nowrap;">
                         <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen">▶</button>
                         <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren">⎘</button>
+                        <button class="btn btn-ghost btn-sm" (click)="openSplit(e)" title="Aufteilen">⚡</button>
                         <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten">✎</button>
                         <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
                       </td>
@@ -180,6 +182,31 @@ interface EntryGroup {
         </div>
       }
     </div>
+
+    @if (splitEntry()) {
+      <div class="dialog-backdrop" (click)="closeSplit()">
+        <div class="dialog" (click)="$event.stopPropagation()" style="max-width: 360px;">
+          <div class="dialog-header">
+            <h3>Eintrag aufteilen</h3>
+            <button class="btn btn-ghost btn-icon" (click)="closeSplit()">✕</button>
+          </div>
+          <div class="dialog-body">
+            <div class="faint" style="font-size: var(--fs-sm);">
+              {{ time(splitEntry()!.startTime) }} – {{ time(splitEntry()!.endTime) }}
+              ({{ splitEntry()!.durationSeconds | duration: 'HH:MM' }})
+            </div>
+            <div class="field mt-4">
+              <label>Aufteilen um</label>
+              <input class="input" type="time" [(ngModel)]="splitTime" />
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn" (click)="closeSplit()">Abbrechen</button>
+            <button class="btn btn-primary" (click)="executeSplit()">Aufteilen</button>
+          </div>
+        </div>
+      </div>
+    }
 
     @if (showDialog()) {
       <div class="dialog-backdrop" (click)="close()">
@@ -307,6 +334,8 @@ export class TimerComponent {
   protected startTime = '09:00';
   protected endTime = '10:00';
   protected form: TimeEntryInput = this.empty();
+  protected readonly splitEntry = signal<TimeEntry | null>(null);
+  protected splitTime = '';
 
   constructor() {
     this.load();
@@ -474,6 +503,31 @@ export class TimerComponent {
     this.timerState
       .start({ projectId: c.projectId, taskId: c.taskId, billable: c.billable ?? true })
       .subscribe(() => this.toast.success('Timer gestartet'));
+  }
+
+  openSplit(e: TimeEntry): void {
+    const midSec = Math.floor(e.durationSeconds / 2);
+    const midDate = new Date(new Date(e.startTime).getTime() + midSec * 1000);
+    this.splitTime = `${String(midDate.getHours()).padStart(2, '0')}:${String(midDate.getMinutes()).padStart(2, '0')}`;
+    this.splitEntry.set(e);
+  }
+
+  closeSplit(): void {
+    this.splitEntry.set(null);
+  }
+
+  executeSplit(): void {
+    const e = this.splitEntry();
+    if (!e || !this.splitTime) return;
+    const [h, m] = this.splitTime.split(':').map(Number);
+    const splitDate = new Date(e.entryDate + 'T00:00:00');
+    splitDate.setHours(h, m, 0, 0);
+    const splitAt = splitDate.toISOString();
+    this.api.split(e.id, splitAt).subscribe(() => {
+      this.toast.success('Aufgeteilt');
+      this.closeSplit();
+      this.load();
+    });
   }
 
   saveDescription(e: TimeEntry, value: string): void {
