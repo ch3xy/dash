@@ -12,6 +12,10 @@ export class TagApiService {
     return this.http.get<Tag[]>('/tags', { params: toParams({ archived }) });
   }
 
+  get(id: Uuid): Observable<Tag> {
+    return this.http.get<Tag>(`/tags/${id}`);
+  }
+
   create(input: TagInput): Observable<Tag> {
     return this.http.post<Tag>('/tags', input);
   }
