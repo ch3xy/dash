@@ -93,8 +93,9 @@ import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils
                   <td class="num mono">{{ e.durationSeconds | duration: 'HH:MM' }}</td>
                   <td class="text-right" style="white-space: nowrap;">
                     <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen">▶</button>
-                    <button class="btn btn-ghost btn-sm" (click)="edit(e)">✎</button>
-                    <button class="btn btn-ghost btn-sm" (click)="remove(e)">🗑</button>
+                    <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren">⎘</button>
+                    <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten">✎</button>
+                    <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
                   </td>
                 </tr>
               }
@@ -321,6 +322,22 @@ export class TimerComponent {
           });
         }
       });
+  }
+
+  duplicate(e: TimeEntry): void {
+    const payload: TimeEntryInput = {
+      projectId: e.projectId,
+      taskId: e.taskId,
+      description: e.description,
+      startTime: e.startTime,
+      endTime: e.endTime,
+      billable: e.billable,
+      tagIds: e.tags.map((t) => t.id),
+    };
+    this.api.create(payload).subscribe(() => {
+      this.toast.success('Dupliziert');
+      this.load();
+    });
   }
 
   continueEntry(e: TimeEntry): void {
