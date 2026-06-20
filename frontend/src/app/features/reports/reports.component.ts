@@ -12,6 +12,8 @@ import {
   Client,
   GroupBy,
   Granularity,
+  HeatmapPoint,
+  HeatmapReport,
   PageResponse,
   Project,
   ReportFilter,
@@ -23,7 +25,7 @@ import { BarChartComponent, BarDatum } from '../../shared/components/bar-chart.c
 import { LineChartComponent, LinePoint } from '../../shared/components/line-chart.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
-import { addDays, timeOf, toIsoDate } from '../../shared/utils/date-utils';
+import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
 
 const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'MONTH'];
 
@@ -106,6 +108,54 @@ const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'M
         @if (trend(); as t) { <app-line-chart [points]="trendPoints(t)" /> }
       </div>
 
+      <!-- Heatmap -->
+      <div class="card card-pad mt-4">
+        <div class="row-between">
+          <div class="card-title" style="margin: 0">Aktivitäts-Heatmap</div>
+          <select class="select btn-sm" [ngModel]="heatmapYear()" (ngModelChange)="heatmapYear.set($event); loadHeatmap()" style="width: auto;">
+            @for (y of heatmapYears; track y) { <option [ngValue]="y">{{ y }}</option> }
+          </select>
+        </div>
+        @if (heatmap(); as h) {
+          <div class="heatmap-wrap">
+            <div class="heatmap-days">
+              @for (d of weekDayLabels; track d) { <div>{{ d }}</div> }
+            </div>
+            <div class="heatmap-grid" style="overflow-x: auto;">
+              @for (week of heatmapGrid(); track $index) {
+                <div class="hm-col">
+                  @for (cell of week; track $index) {
+                    @if (cell) {
+                      <div class="hm-cell"
+                           [class.hm-0]="cell.intensity === 0"
+                           [class.hm-1]="cell.intensity > 0 && cell.intensity <= 0.25"
+                           [class.hm-2]="cell.intensity > 0.25 && cell.intensity <= 0.5"
+                           [class.hm-3]="cell.intensity > 0.5 && cell.intensity <= 0.75"
+                           [class.hm-4]="cell.intensity > 0.75"
+                           [title]="cell.date + ': ' + (cell.durationSeconds | duration: 'HH:MM')">
+                      </div>
+                    } @else {
+                      <div class="hm-cell hm-empty"></div>
+                    }
+                  }
+                </div>
+              }
+            </div>
+          </div>
+          <div class="heatmap-legend">
+            <span class="faint" style="font-size: var(--fs-xs)">weniger</span>
+            <div class="hm-cell hm-0"></div>
+            <div class="hm-cell hm-1"></div>
+            <div class="hm-cell hm-2"></div>
+            <div class="hm-cell hm-3"></div>
+            <div class="hm-cell hm-4"></div>
+            <span class="faint" style="font-size: var(--fs-xs)">mehr</span>
+          </div>
+        } @else {
+          <div class="state"><div class="spinner"></div></div>
+        }
+      </div>
+
       <!-- Budget -->
       @if (budget().length) {
         <div class="card card-pad mt-4">
@@ -165,6 +215,19 @@ const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'M
   styles: [`
     .filter-bar { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; position: sticky; top: 0; z-index: 5; }
     .filter-bar .field { margin: 0; min-width: 120px; }
+    .heatmap-wrap { display: flex; gap: 4px; margin-top: var(--sp-3); align-items: flex-start; }
+    .heatmap-days { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--text-faint); padding-top: 0; width: 24px; flex-shrink: 0; }
+    .heatmap-days div { height: 12px; line-height: 12px; text-align: right; padding-right: 4px; }
+    .heatmap-grid { display: flex; gap: 2px; }
+    .hm-col { display: flex; flex-direction: column; gap: 2px; }
+    .hm-cell { width: 12px; height: 12px; border-radius: 2px; }
+    .hm-empty { background: transparent; }
+    .hm-0 { background: var(--border); }
+    .hm-1 { background: color-mix(in srgb, var(--brand) 30%, var(--border)); }
+    .hm-2 { background: color-mix(in srgb, var(--brand) 55%, var(--border)); }
+    .hm-3 { background: color-mix(in srgb, var(--brand) 80%, var(--border)); }
+    .hm-4 { background: var(--brand); }
+    .heatmap-legend { display: flex; align-items: center; gap: 3px; margin-top: var(--sp-2); justify-content: flex-end; }
   `],
 })
 export class ReportsComponent {
@@ -183,6 +246,38 @@ export class ReportsComponent {
   protected readonly detailed = signal<PageResponse<TimeEntry> | null>(null);
   protected readonly granularity = signal<Granularity>('DAY');
   protected readonly page = signal(0);
+  protected readonly heatmap = signal<HeatmapReport | null>(null);
+  protected readonly heatmapYear = signal(new Date().getFullYear());
+  protected readonly heatmapYears = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+  protected readonly weekDayLabels = ['Mo', '', 'Mi', '', 'Fr', '', 'So'];
+
+  protected readonly heatmapGrid = computed<Array<Array<HeatmapPoint | null>>>(() => {
+    const h = this.heatmap();
+    if (!h) return [];
+    const byDate = new Map(h.data.map((p) => [p.date, p]));
+    const year = h.year;
+    // Start from Monday of week containing Jan 1
+    const jan1 = new Date(year, 0, 1);
+    const startDate = startOfWeek(jan1);
+    // End at Sunday of week containing Dec 31
+    const dec31 = new Date(year, 11, 31);
+    const lastDow = (dec31.getDay() + 6) % 7;
+    const endDate = addDays(dec31, 6 - lastDow);
+    const weeks: Array<Array<HeatmapPoint | null>> = [];
+    let cur = new Date(startDate);
+    while (cur <= endDate) {
+      const week: Array<HeatmapPoint | null> = [];
+      for (let d = 0; d < 7; d++) {
+        const iso = toIsoDate(cur);
+        week.push(cur.getFullYear() === year
+          ? (byDate.get(iso) ?? { date: iso, durationSeconds: 0, intensity: 0 })
+          : null);
+        cur = addDays(cur, 1);
+      }
+      weeks.push(week);
+    }
+    return weeks;
+  });
 
   /** Filter derived from URL query params. */
   protected readonly f = toSignal(
@@ -198,12 +293,18 @@ export class ReportsComponent {
   constructor() {
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.clientApi.getAll().subscribe((c) => this.clients.set(c));
+    this.loadHeatmap();
     // React to filter changes.
     effect(() => {
       const filter = this.f();
       this.page.set(0);
       this.loadAll(filter);
     });
+  }
+
+  loadHeatmap(): void {
+    this.heatmap.set(null);
+    this.reportApi.heatmap(this.heatmapYear()).subscribe((h) => this.heatmap.set(h));
   }
 
   private defaultFilter(): ReportFilter {
