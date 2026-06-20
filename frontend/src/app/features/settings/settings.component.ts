@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { DataIoApiService } from '../../core/api/data-io-api.service';
 import { SettingsApiService } from '../../core/api/settings-api.service';
 import { AppSettings, RoundingRule } from '../../core/models';
+import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
 
 @Component({
@@ -68,6 +69,7 @@ export class SettingsComponent {
   private readonly api = inject(SettingsApiService);
   private readonly dataIo = inject(DataIoApiService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly settings = signal<AppSettings | null>(null);
   protected readonly busy = signal(false);
@@ -129,11 +131,24 @@ export class SettingsComponent {
     if (!file) {
       return;
     }
-    if (!confirm('Alle vorhandenen Daten werden durch das Backup ersetzt. Fortfahren?')) {
-      input.value = '';
-      return;
-    }
-    this.busy.set(true);
+    this.dialog
+      .confirm({
+        title: 'Wiederherstellen',
+        message: 'Alle vorhandenen Daten werden durch das Backup ersetzt. Fortfahren?',
+        confirmLabel: 'Ersetzen',
+        danger: true,
+      })
+      .then((ok) => {
+        if (!ok) {
+          input.value = '';
+          return;
+        }
+        this.busy.set(true);
+        this.runRestore(file, input);
+      });
+  }
+
+  private runRestore(file: File, input: HTMLInputElement): void {
     file.text().then((text) => {
       let doc: unknown;
       try {

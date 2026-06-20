@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { TagApiService } from '../../core/api/tag-api.service';
 import { Tag, TagInput } from '../../core/models';
+import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
 
 @Component({
@@ -49,6 +50,7 @@ import { ToastService } from '../../core/toast.service';
 export class TagsComponent {
   private readonly api = inject(TagApiService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly tags = signal<Tag[]>([]);
   protected readonly loading = signal(true);
@@ -84,10 +86,11 @@ export class TagsComponent {
   }
 
   rename(t: Tag): void {
-    const name = prompt('Neuer Name', t.name);
-    if (name && name.trim()) {
-      this.api.update(t.id, { name: name.trim(), color: t.color }).subscribe(() => this.load());
-    }
+    this.dialog.prompt({ title: 'Tag umbenennen', label: 'Name', value: t.name }).then((name) => {
+      if (name && name.trim()) {
+        this.api.update(t.id, { name: name.trim(), color: t.color }).subscribe(() => this.load());
+      }
+    });
   }
 
   archive(t: Tag): void {

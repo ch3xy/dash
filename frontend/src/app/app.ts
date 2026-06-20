@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { KeyboardShortcutService } from './core/keyboard-shortcut.service';
 import { ThemeService } from './core/theme.service';
+import { DialogHostComponent } from './core/layout/dialog-host.component';
 import { TimerBarComponent } from './core/layout/timer-bar.component';
 import { ToastHostComponent } from './core/layout/toast-host.component';
 
@@ -14,7 +15,14 @@ interface NavItem {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TimerBarComponent, ToastHostComponent],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    TimerBarComponent,
+    ToastHostComponent,
+    DialogHostComponent,
+  ],
   template: `
     <div class="shell">
       <aside class="sidebar">
@@ -46,6 +54,7 @@ interface NavItem {
       </div>
     </div>
     <app-toast-host />
+    <app-dialog-host />
   `,
   styles: [`
     .shell { display: flex; height: 100vh; overflow: hidden; }

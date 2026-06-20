@@ -4,6 +4,7 @@ import { ReportApiService } from '../../core/api/report-api.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { TimeEntryApiService } from '../../core/api/time-entry-api.service';
 import { Project, WeeklyReport } from '../../core/models';
+import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { addDays, startOfWeek, toInstant, toIsoDate } from '../../shared/utils/date-utils';
@@ -94,6 +95,7 @@ export class TimesheetComponent {
   private readonly projectApi = inject(ProjectApiService);
   private readonly entryApi = inject(TimeEntryApiService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly report = signal<WeeklyReport | null>(null);
   protected readonly projects = signal<Project[]>([]);
@@ -175,22 +177,25 @@ export class TimesheetComponent {
 
   addTime(row: Row, date: string): void {
     const projectId = row.projectId;
-    const input = prompt(`Stunden für ${row.projectName} am ${date}:`, '1');
-    if (input == null) {
-      return;
-    }
-    const hours = Number(input.replace(',', '.'));
-    if (!hours || hours <= 0) {
-      this.toast.error('Ungültige Stundenzahl');
-      return;
-    }
-    const start = toInstant(date, '09:00');
-    const end = new Date(new Date(start).getTime() + hours * 3600 * 1000).toISOString();
-    this.entryApi
-      .create({ projectId, taskId: null, description: null, startTime: start, endTime: end, billable: true })
-      .subscribe(() => {
-        this.toast.success('Zeit eingetragen');
-        this.load();
+    this.dialog
+      .prompt({ title: `Zeit erfassen — ${row.projectName}`, label: `Stunden am ${date}`, value: '1', placeholder: 'z. B. 1,5' })
+      .then((input) => {
+        if (input == null) {
+          return;
+        }
+        const hours = Number(input.replace(',', '.'));
+        if (!hours || hours <= 0) {
+          this.toast.error('Ungültige Stundenzahl');
+          return;
+        }
+        const start = toInstant(date, '09:00');
+        const end = new Date(new Date(start).getTime() + hours * 3600 * 1000).toISOString();
+        this.entryApi
+          .create({ projectId, taskId: null, description: null, startTime: start, endTime: end, billable: true })
+          .subscribe(() => {
+            this.toast.success('Zeit eingetragen');
+            this.load();
+          });
       });
   }
 }

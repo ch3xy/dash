@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { ClientApiService } from '../../core/api/client-api.service';
 import { Client, ClientInput } from '../../core/models';
+import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
 
 @Component({
@@ -93,6 +94,7 @@ import { ToastService } from '../../core/toast.service';
 export class ClientsComponent {
   private readonly api = inject(ClientApiService);
   private readonly toast = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly clients = signal<Client[]>([]);
   protected readonly loading = signal(true);
@@ -156,12 +158,15 @@ export class ClientsComponent {
   }
 
   remove(c: Client): void {
-    if (!confirm(`Kunde „${c.name}" löschen?`)) {
-      return;
-    }
-    this.api.delete(c.id).subscribe(() => {
-      this.toast.success('Gelöscht');
-      this.load();
-    });
+    this.dialog
+      .confirm({ title: 'Kunde löschen', message: `Kunde „${c.name}" löschen?`, confirmLabel: 'Löschen', danger: true })
+      .then((ok) => {
+        if (ok) {
+          this.api.delete(c.id).subscribe(() => {
+            this.toast.success('Gelöscht');
+            this.load();
+          });
+        }
+      });
   }
 }

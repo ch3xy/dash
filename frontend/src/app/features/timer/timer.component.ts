@@ -6,6 +6,7 @@ import { TagApiService } from '../../core/api/tag-api.service';
 import { TaskApiService } from '../../core/api/task-api.service';
 import { TimeEntryApiService } from '../../core/api/time-entry-api.service';
 import { KeyboardShortcutService } from '../../core/keyboard-shortcut.service';
+import { DialogService } from '../../core/dialog.service';
 import { Project, RecentCombination, Tag, Task, TimeEntry, TimeEntryInput } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { TimerStateService } from '../../core/timer-state.service';
@@ -153,6 +154,7 @@ export class TimerComponent {
   protected readonly timerState = inject(TimerStateService);
   private readonly toast = inject(ToastService);
   private readonly shortcuts = inject(KeyboardShortcutService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly entries = signal<TimeEntry[]>([]);
   protected readonly projects = signal<Project[]>([]);
@@ -279,13 +281,16 @@ export class TimerComponent {
   }
 
   remove(e: TimeEntry): void {
-    if (!confirm('Eintrag löschen?')) {
-      return;
-    }
-    this.api.delete(e.id).subscribe(() => {
-      this.toast.success('Gelöscht');
-      this.load();
-    });
+    this.dialog
+      .confirm({ title: 'Eintrag löschen', message: 'Diesen Zeiteintrag löschen?', confirmLabel: 'Löschen', danger: true })
+      .then((ok) => {
+        if (ok) {
+          this.api.delete(e.id).subscribe(() => {
+            this.toast.success('Gelöscht');
+            this.load();
+          });
+        }
+      });
   }
 
   continueEntry(e: TimeEntry): void {
