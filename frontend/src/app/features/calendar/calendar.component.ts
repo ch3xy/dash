@@ -67,14 +67,21 @@ interface DragState {
               }
             </div>
             @for (col of columns(); track col.date) {
-              <div class="day">
-                <div class="hd">{{ col.label }}</div>
+              <div class="day" [class.today-col]="col.date === todayIso">
+                <div class="hd" [class.today-hd]="col.date === todayIso">{{ col.label }}</div>
                 <div class="grid-bg" [style.height.px]="hourPx * 24"
                      (mousedown)="onGridMouseDown($event, col.date)"
                      (mousemove)="onGridMouseMove($event, col.date)"
                      (mouseup)="onGridMouseUp()">
                   @for (h of hours; track h) {
                     <div class="hline" [style.top.px]="h * hourPx"></div>
+                    <div class="hline hline-half" [style.top.px]="h * hourPx + hourPx / 2"></div>
+                  }
+                  <!-- Current time indicator (today column only) -->
+                  @if (col.date === todayIso) {
+                    <div class="now-line" [style.top.px]="nowTop()">
+                      <div class="now-dot"></div>
+                    </div>
                   }
                   <!-- Ghost block while dragging -->
                   @if (drag(); as d) {
@@ -202,7 +209,12 @@ interface DragState {
     .hour-label { font-size: var(--fs-xs); color: var(--text-faint); text-align: right;
                   padding-right: var(--sp-2); box-sizing: border-box; }
     .grid-bg { position: relative; cursor: crosshair; }
+    .today-col { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+    .today-hd { color: var(--brand); font-weight: 700; }
     .hline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); opacity: 0.5; }
+    .hline-half { border-top-style: dashed; opacity: 0.25; }
+    .now-line { position: absolute; left: 0; right: 0; border-top: 2px solid #e53e3e; z-index: 3; pointer-events: none; }
+    .now-dot { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #e53e3e; }
     .block { position: absolute; left: 3px; right: 3px;
              background: var(--brand-soft); border-left: 3px solid var(--brand);
              border-radius: var(--radius-sm); padding: 2px 4px; overflow: hidden;
@@ -231,6 +243,9 @@ export class CalendarComponent {
   protected readonly hours = Array.from({ length: 24 }, (_, i) => i);
   protected readonly loading = signal(true);
   protected weekStart = startOfWeek(new Date());
+  protected readonly todayIso = toIsoDate(new Date());
+  private readonly nowMinutes = signal(this.currentMinutes());
+
 
   private readonly entries = signal<TimeEntry[]>([]);
   protected readonly drag = signal<DragState | null>(null);
@@ -278,6 +293,16 @@ export class CalendarComponent {
     this.load();
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
+    setInterval(() => this.nowMinutes.set(this.currentMinutes()), 60_000);
+  }
+
+  protected nowTop(): number {
+    return (this.nowMinutes() / 60) * HOUR_PX;
+  }
+
+  private currentMinutes(): number {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
   }
 
   load(): void {
