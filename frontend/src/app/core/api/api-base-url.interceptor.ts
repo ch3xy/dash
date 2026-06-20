@@ -1,9 +1,9 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 
-/** Prefixes all relative API calls with /api/v1. Absolute URLs pass through. */
+/** Prefixes feature-relative API calls with api/v1 so baseHref controls the external prefix. */
 export const apiBaseUrlInterceptor: HttpInterceptorFn = (req, next) => {
-  if (req.url.startsWith('http') || req.url.startsWith('/api/')) {
+  if (/^[a-z][a-z\d+\-.]*:\/\//i.test(req.url) || req.url.startsWith('api/')) {
     return next(req);
   }
-  return next(req.clone({ url: `/api/v1${req.url}` }));
+  return next(req.clone({ url: `api/v1${req.url}` }));
 };

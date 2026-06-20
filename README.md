@@ -52,7 +52,29 @@ frontend/src/app/
                        projects (+detail), tags, reports, settings
 ```
 
-- API-Aufrufe relativ (`/clients`); Interceptor stellt `/api/v1` voran, Dev-Proxy
+- API-Aufrufe sind `baseHref`-relativ (`/clients`); der Interceptor stellt `api/v1` voran, Dev-Proxy
   leitet `/api` an den Backend-Port weiter (`frontend/proxy.conf.json`).
 - Kein UI-Framework (Material/PrimeNG): eigenes Design-System in `src/styles.scss`
   mit Light/Dark-Theme; Charts als leichtgewichtiges HTML/SVG ohne Chart-Library.
+
+## Deployment unter `/dash`
+
+Wie in `velo` läuft das Backend ohne Servlet-Context-Path unter `/`. Der externe
+Pfad `/dash` wird durch den Reverse Proxy behandelt; Angular nutzt im Production-
+Build `baseHref: "/dash/"`.
+
+Beispiel mit Caddy:
+
+```caddy
+:80 {
+    handle_path /dash* {
+        reverse_proxy localhost:8080
+    }
+}
+```
+
+Ablauf:
+
+- Browser ruft `/dash/api/v1/clients` auf, weil API-URLs relativ zu `<base href="/dash/">` sind.
+- `handle_path /dash*` strippt `/dash` und leitet an das Backend als `/api/v1/clients` weiter.
+- Backend bleibt prefix-frei und bedient `/api/v1/**`.

@@ -21,16 +21,16 @@ describe('ClientApiService', () => {
 
   afterEach(() => http.verify());
 
-  it('prefixes requests with /api/v1 and defaults archived=false', () => {
+  it('prefixes requests with api/v1 and defaults archived=false', () => {
     service.getAll().subscribe();
-    const req = http.expectOne((r) => r.url === '/api/v1/clients');
+    const req = http.expectOne((r) => r.url === 'api/v1/clients');
     expect(req.request.params.get('archived')).toBe('false');
     req.flush([]);
   });
 
   it('POSTs the client body on create', () => {
     service.create({ name: 'Acme', currencyCode: 'EUR' }).subscribe();
-    const req = http.expectOne('/api/v1/clients');
+    const req = http.expectOne('api/v1/clients');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ name: 'Acme', currencyCode: 'EUR' });
     req.flush({ id: '1', name: 'Acme' });
@@ -38,7 +38,7 @@ describe('ClientApiService', () => {
 
   it('PATCHes the archive sub-resource', () => {
     service.archive('abc').subscribe();
-    const req = http.expectOne('/api/v1/clients/abc/archive');
+    const req = http.expectOne('api/v1/clients/abc/archive');
     expect(req.request.method).toBe('PATCH');
     req.flush({});
   });

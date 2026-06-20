@@ -27,11 +27,11 @@ describe('ClientsComponent', () => {
 
   afterEach(() => http.verify());
 
-  it('loads clients on init via /api/v1/clients', () => {
+  it('loads clients on init via api/v1/clients', () => {
     const fixture = TestBed.createComponent(ClientsComponent);
     fixture.detectChanges();
 
-    const req = http.expectOne((r) => r.url === '/api/v1/clients');
+    const req = http.expectOne((r) => r.url === 'api/v1/clients');
     req.flush([client({ name: 'Acme' }), client({ id: '2', name: 'Globex' })]);
 
     const cmp = fixture.componentInstance as unknown as { clients: () => Client[]; loading: () => boolean };
@@ -42,13 +42,13 @@ describe('ClientsComponent', () => {
   it('reloads with archived=true when the toggle is set', () => {
     const fixture = TestBed.createComponent(ClientsComponent);
     fixture.detectChanges();
-    http.expectOne((r) => r.url === '/api/v1/clients').flush([]);
+    http.expectOne((r) => r.url === 'api/v1/clients').flush([]);
 
     const cmp = fixture.componentInstance as unknown as { showArchived: boolean; load: () => void };
     cmp.showArchived = true;
     cmp.load();
 
-    const req = http.expectOne((r) => r.url === '/api/v1/clients');
+    const req = http.expectOne((r) => r.url === 'api/v1/clients');
     expect(req.request.params.get('archived')).toBe('true');
     req.flush([]);
   });

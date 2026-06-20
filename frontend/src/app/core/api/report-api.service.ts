@@ -60,6 +60,6 @@ export class ReportApiService {
 
   exportUrl(format: 'csv' | 'xlsx', filter: ReportFilter): string {
     const params = toParams(filter as Record<string, unknown>).toString();
-    return `/api/v1/reports/export.${format}${params ? `?${params}` : ''}`;
+    return `api/v1/reports/export.${format}${params ? `?${params}` : ''}`;
   }
 }
