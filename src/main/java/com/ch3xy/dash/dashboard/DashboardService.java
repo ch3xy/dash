@@ -7,6 +7,8 @@ import com.ch3xy.dash.dashboard.DashboardResponse.TopProject;
 import com.ch3xy.dash.report.ReportService;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.settings.AppSettingsService;
+import com.ch3xy.dash.timeentry.TimeEntryRepository;
+import com.ch3xy.dash.timeentry.TimeEntryResponse;
 import com.ch3xy.dash.timer.TimerService;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -27,15 +29,18 @@ public class DashboardService {
     private final ReportService reportService;
     private final TimerService timerService;
     private final AppSettingsService settingsService;
+    private final TimeEntryRepository timeEntryRepository;
 
     public DashboardService(NamedParameterJdbcTemplate jdbc,
                             ReportService reportService,
                             TimerService timerService,
-                            AppSettingsService settingsService) {
+                            AppSettingsService settingsService,
+                            TimeEntryRepository timeEntryRepository) {
         this.jdbc = jdbc;
         this.reportService = reportService;
         this.timerService = timerService;
         this.settingsService = settingsService;
+        this.timeEntryRepository = timeEntryRepository;
     }
 
     public DashboardResponse getDashboard() {
@@ -44,6 +49,12 @@ public class DashboardService {
         LocalDate monthStart = today.withDayOfMonth(1);
         String currency = settingsService.getCurrency();
 
+        List<TimeEntryResponse> recentEntries = timeEntryRepository
+                .findTop5ByOrderByStartTimeDesc()
+                .stream()
+                .map(TimeEntryResponse::from)
+                .toList();
+
         return new DashboardResponse(
                 periodStats(today, today, currency),
                 periodStats(weekStart, today, currency),
@@ -51,7 +62,8 @@ public class DashboardService {
                 timerService.findCurrent().orElse(null),
                 budgetAlerts(),
                 topProjects(today.minusDays(30), today),
-                topClients(today.minusDays(30), today, currency)
+                topClients(today.minusDays(30), today, currency),
+                recentEntries
         );
     }
 

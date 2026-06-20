@@ -70,4 +70,14 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
             ORDER BY te.entryDate ASC, te.startTime ASC
             """)
     List<TimeEntry> findByEntryDateRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    @Query("""
+            SELECT te FROM TimeEntry te
+            JOIN FETCH te.project p
+            LEFT JOIN FETCH p.client
+            LEFT JOIN FETCH te.task
+            ORDER BY te.startTime DESC
+            LIMIT 5
+            """)
+    List<TimeEntry> findTop5ByOrderByStartTimeDesc();
 }

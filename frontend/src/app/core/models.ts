@@ -312,6 +312,7 @@ export interface Dashboard {
   budgetAlerts: BudgetAlert[];
   topProjects: TopProject[];
   topClients: TopClient[];
+  recentEntries: TimeEntry[];
 }
 
 // ---- Settings ----

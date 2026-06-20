@@ -1,5 +1,6 @@
 package com.ch3xy.dash.dashboard;
 
+import com.ch3xy.dash.timeentry.TimeEntryResponse;
 import com.ch3xy.dash.timer.TimerResponse;
 
 import java.math.BigDecimal;
@@ -13,7 +14,8 @@ public record DashboardResponse(
         TimerResponse runningTimer,
         List<BudgetAlert> budgetAlerts,
         List<TopProject> topProjects,
-        List<TopClient> topClients
+        List<TopClient> topClients,
+        List<TimeEntryResponse> recentEntries
 ) {
     public record PeriodStats(
             long durationSeconds,

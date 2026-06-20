@@ -5,6 +5,7 @@ import { DashboardApiService } from '../../core/api/dashboard-api.service';
 import { Dashboard } from '../../core/models';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
+import { timeOf } from '../../shared/utils/date-utils';
 
 @Component({
   selector: 'app-dashboard',
@@ -96,6 +97,38 @@ import { MoneyPipe } from '../../shared/pipes/money.pipe';
             <div class="muted">Noch keine Einträge.</div>
           }
         </div>
+
+        @if (d.recentEntries.length) {
+          <div class="card mt-4">
+            <div class="card-pad" style="border-bottom: 1px solid var(--border)">
+              <div class="card-title" style="margin: 0">Letzte Einträge</div>
+            </div>
+            <table class="table">
+              <tbody>
+                @for (e of d.recentEntries; track e.id) {
+                  <tr>
+                    <td>
+                      <span class="row gap-2">
+                        <span class="badge-dot" [style.background]="e.projectColor || 'var(--brand)'"></span>
+                        <span>{{ e.projectName }}</span>
+                      </span>
+                      @if (e.description) {
+                        <div class="faint" style="font-size: var(--fs-sm); padding-left: 18px;">{{ e.description }}</div>
+                      }
+                    </td>
+                    <td class="faint" style="white-space: nowrap; font-size: var(--fs-sm);">
+                      {{ e.entryDate }} · {{ time(e.startTime) }}–{{ time(e.endTime) }}
+                    </td>
+                    <td class="num mono">{{ e.durationSeconds | duration: 'HH:MM' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <div class="card-pad" style="border-top: 1px solid var(--border); text-align: right;">
+              <a routerLink="/timer" class="btn btn-ghost btn-sm">Alle Einträge →</a>
+            </div>
+          </div>
+        }
       } @else {
         <div class="state">Keine Daten verfügbar.</div>
       }
@@ -120,5 +153,9 @@ export class DashboardComponent {
   protected barWidth(seconds: number, d: Dashboard): number {
     const max = Math.max(...d.topProjects.map((p) => p.durationSeconds), 1);
     return (seconds / max) * 100;
+  }
+
+  protected time(instant: string): string {
+    return timeOf(instant);
   }
 }
