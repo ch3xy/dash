@@ -297,6 +297,20 @@ Identisches Body-Format wie POST. Rate-Snapshot wird neu berechnet.
 Startet einen neuen `RunningTimer` mit Daten des referenzierten TimeEntry.  
 Schlägt fehl mit `409 Conflict`, wenn bereits ein Timer läuft.
 
+### `POST /time-entries/bulk` → `201`
+
+Erstellt mehrere Einträge in einer Transaktion (all-or-nothing). Body: Array von
+TimeEntry-Objekten (Format wie `POST /time-entries`). Response: Array der erstellten Einträge.
+
+### `GET /time-entries/recent-combinations?limit=5` → `200`
+
+Zuletzt verwendete Projekt/Task-Kombinationen für Schnellstart:
+```json
+[
+  { "projectId": "uuid", "projectName": "string", "taskId": "uuid|null", "taskName": "string|null" }
+]
+```
+
 ---
 
 ## Timer
@@ -527,4 +541,51 @@ Body: Identisches Objekt.
     { "clientId": "uuid", "clientName": "string", "revenueAmount": "2040.00" }
   ]
 }
+```
+
+---
+
+## Daten-Import / -Export
+
+### `POST /import/clockify` → `200`
+
+Content-Type: `text/csv` (oder `text/plain`). Body: Clockify-CSV-Export. Legt fehlende
+Kunden/Projekte/Tasks/Tags an (find-or-create), importiert je Zeile in eigener Transaktion.
+
+```json
+{
+  "importedEntries": 42,
+  "createdClients": 2,
+  "createdProjects": 3,
+  "createdTasks": 5,
+  "createdTags": 4,
+  "warnings": ["Zeile 7: Endzeit vor Startzeit, übersprungen"]
+}
+```
+
+### `GET /backup` → `200`
+
+Vollständiger JSON-Snapshot aller Daten. `Content-Disposition: attachment; filename="dash-backup.json"`.
+
+```json
+{
+  "exportedAt": "2026-06-20T10:00:00Z",
+  "settings": { /* AppSettings */ },
+  "clients": [ /* ClientResponse[] */ ],
+  "projects": [ /* ProjectResponse[] */ ],
+  "projectRates": [ /* ProjectRateResponse[] */ ],
+  "tasks": [ /* TaskResponse[] */ ],
+  "tags": [ /* TagResponse[] */ ],
+  "timeEntries": [ /* TimeEntryResponse[] */ ]
+}
+```
+
+### `POST /backup/restore` → `200`
+
+**Ersetzt alle vorhandenen Daten unwiderruflich.** Body: ein `BackupDocument` (Format wie
+`GET /backup`). Transaktionaler Wipe (FK-sichere Reihenfolge) + Re-Insert unter Erhalt der
+Original-IDs und aller Snapshots (Stundensatz, Betrag, Ratenhistorie bleiben reproduzierbar).
+
+```json
+{ "clients": 3, "projects": 5, "projectRates": 4, "tasks": 8, "tags": 4, "timeEntries": 120 }
 ```
