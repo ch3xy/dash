@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Optional;
@@ -86,6 +87,12 @@ public class TimerService {
     public TimeEntryResponse stop(TimerStopRequest req) {
         RunningTimer timer = currentOrThrow();
         Instant now = clock.instant();
+
+        // A timer stopped in under a second would yield durationSeconds = 0, which violates the
+        // chk_duration_positive constraint. Guarantee a minimum 1-second entry instead of failing.
+        if (Duration.between(timer.getStartTime(), now).getSeconds() < 1) {
+            now = timer.getStartTime().plusSeconds(1);
+        }
 
         String description = req != null && req.description() != null
                 ? req.description()

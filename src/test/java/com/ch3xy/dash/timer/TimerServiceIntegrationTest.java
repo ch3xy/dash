@@ -69,6 +69,18 @@ class TimerServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void stoppingImmediatelyProducesAtLeastOneSecondEntry() {
+        // Start and stop at the exact same instant: duration would be 0s and violate
+        // chk_duration_positive. The service must clamp to a minimum of 1 second.
+        timerService.start(new TimerStartRequest(project.id(), null, "blip", true, Set.of()));
+
+        TimeEntryResponse entry = timerService.stop(new TimerStopRequest(null));
+
+        assertThat(entry.durationSeconds()).isEqualTo(1);
+        assertThat(timerRepository.count()).isZero();
+    }
+
+    @Test
     void startingSecondTimerWhileOneRunsIsRejected() {
         timerService.start(new TimerStartRequest(project.id(), null, "first", true, Set.of()));
 
