@@ -1,5 +1,6 @@
 package com.ch3xy.dash.report;
 
+import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.report.dto.HeatmapResponse.HeatmapDay;
 import com.ch3xy.dash.report.dto.SummaryReportResponse.SummaryGroup;
@@ -127,6 +128,32 @@ public class ReportQueryRepository {
                     usedPercent,
                     status
             );
+        });
+    }
+
+    public List<AttendanceResponse.AttendanceDay> attendance(LocalDate from, LocalDate to) {
+        String sql = """
+                SELECT te.entry_date AS day,
+                       MIN(te.start_time) AS first_start,
+                       MAX(te.end_time) AS last_end,
+                       SUM(te.duration_seconds) AS total_seconds
+                FROM time_entries te
+                WHERE te.entry_date >= CAST(:from AS date) AND te.entry_date <= CAST(:to AS date)
+                GROUP BY te.entry_date
+                ORDER BY te.entry_date ASC
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("from", from)
+                .addValue("to", to);
+        return jdbc.query(sql, params, (rs, rowNum) -> {
+            java.time.Instant firstStart = rs.getObject("first_start", java.time.OffsetDateTime.class).toInstant();
+            java.time.Instant lastEnd = rs.getObject("last_end", java.time.OffsetDateTime.class).toInstant();
+            long totalSeconds = rs.getLong("total_seconds");
+            long span = java.time.Duration.between(firstStart, lastEnd).getSeconds();
+            // Overlapping entries can make the tracked sum exceed the day span.
+            long breakSeconds = Math.max(0, span - totalSeconds);
+            return new AttendanceResponse.AttendanceDay(
+                    rs.getObject("day", LocalDate.class), firstStart, lastEnd, totalSeconds, breakSeconds);
         });
     }
 

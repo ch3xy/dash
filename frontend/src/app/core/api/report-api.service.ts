@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  AttendanceReport,
   BudgetReportRow,
   HeatmapReport,
   IsoDate,
@@ -52,6 +53,10 @@ export class ReportApiService {
 
   heatmap(year?: number): Observable<HeatmapReport> {
     return this.http.get<HeatmapReport>('/reports/heatmap', { params: toParams({ year }) });
+  }
+
+  attendance(from?: IsoDate, to?: IsoDate): Observable<AttendanceReport> {
+    return this.http.get<AttendanceReport>('/reports/attendance', { params: toParams({ from, to }) });
   }
 
   weekly(weekStart?: IsoDate): Observable<WeeklyReport> {

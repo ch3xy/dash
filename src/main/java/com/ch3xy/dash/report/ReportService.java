@@ -1,5 +1,6 @@
 package com.ch3xy.dash.report;
 
+import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.report.dto.HeatmapResponse;
 import com.ch3xy.dash.report.dto.HeatmapResponse.HeatmapDay;
@@ -129,6 +130,19 @@ public class ReportService {
         LocalDate to = LocalDate.of(y, 12, 31);
         List<HeatmapDay> data = queryRepository.heatmap(from, to);
         return new HeatmapResponse(y, data);
+    }
+
+    // --- Attendance -------------------------------------------------------
+
+    /**
+     * Working days in the range with first start, last end and the untracked
+     * gap in between. Defaults to the last 30 days in the app timezone.
+     */
+    public AttendanceResponse getAttendance(LocalDate from, LocalDate to) {
+        LocalDate effectiveTo = to != null ? to : LocalDate.now(settingsService.getTimezone());
+        LocalDate effectiveFrom = from != null ? from : effectiveTo.minusDays(29);
+        return new AttendanceResponse(effectiveFrom, effectiveTo,
+                queryRepository.attendance(effectiveFrom, effectiveTo));
     }
 
     // --- Weekly timesheet ------------------------------------------------

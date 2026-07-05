@@ -102,4 +102,29 @@ class ExtendedReportIntegrationTest extends AbstractIntegrationTest {
         assertThat(xlsx[0]).isEqualTo((byte) 'P');
         assertThat(xlsx[1]).isEqualTo((byte) 'K');
     }
+
+    @Test
+    void attendanceReportsFirstStartLastEndAndBreaks() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Attendance Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+
+        // Two blocks: 08:00–10:00 and 11:00–12:00 → 3h tracked, 1h break.
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "morning",
+                Instant.parse("2027-03-09T08:00:00Z"), Instant.parse("2027-03-09T10:00:00Z"),
+                true, Set.of()));
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "late morning",
+                Instant.parse("2027-03-09T11:00:00Z"), Instant.parse("2027-03-09T12:00:00Z"),
+                true, Set.of()));
+
+        var attendance = reportService.getAttendance(
+                LocalDate.of(2027, 3, 9), LocalDate.of(2027, 3, 9));
+
+        assertThat(attendance.days()).hasSize(1);
+        var day = attendance.days().getFirst();
+        assertThat(day.firstStart()).isEqualTo(Instant.parse("2027-03-09T08:00:00Z"));
+        assertThat(day.lastEnd()).isEqualTo(Instant.parse("2027-03-09T12:00:00Z"));
+        assertThat(day.totalSeconds()).isEqualTo(3 * 3600);
+        assertThat(day.breakSeconds()).isEqualTo(3600);
+    }
 }

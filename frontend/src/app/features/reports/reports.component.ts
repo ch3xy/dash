@@ -9,6 +9,7 @@ import { DialogService } from '../../core/dialog.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { ReportApiService } from '../../core/api/report-api.service';
 import {
+  AttendanceReport,
   BudgetReportRow,
   Client,
   GroupBy,
@@ -172,6 +173,31 @@ type DetailRow =
         }
       </div>
 
+      <!-- Attendance -->
+      @if (attendance(); as a) {
+        @if (a.days.length) {
+          <div class="card mt-4" style="overflow-x: auto;">
+            <div class="card-pad" style="border-bottom: 1px solid var(--border)">
+              <div class="card-title" style="margin:0">Anwesenheit</div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Datum</th><th class="num">Erster Start</th><th class="num">Letztes Ende</th><th class="num">Erfasst</th><th class="num">Pausen</th></tr></thead>
+              <tbody>
+                @for (day of a.days; track day.date) {
+                  <tr>
+                    <td class="mono">{{ day.date }}</td>
+                    <td class="num mono">{{ time(day.firstStart) }}</td>
+                    <td class="num mono">{{ time(day.lastEnd) }}</td>
+                    <td class="num mono">{{ day.totalSeconds | duration: 'HH:MM' }}</td>
+                    <td class="num mono faint">{{ day.breakSeconds | duration: 'HH:MM' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
       <!-- Budget -->
       @if (budget().length) {
         <div class="card mt-4" style="overflow-x: auto;">
@@ -334,6 +360,7 @@ export class ReportsComponent {
     }
     return rows;
   });
+  protected readonly attendance = signal<AttendanceReport | null>(null);
   protected readonly heatmap = signal<HeatmapReport | null>(null);
   protected readonly heatmapYear = signal(new Date().getFullYear());
   protected readonly heatmapYears = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
@@ -425,6 +452,7 @@ export class ReportsComponent {
   private loadAll(filter: ReportFilter): void {
     this.reportApi.summary(filter).subscribe((s) => this.summary.set(s));
     this.reportApi.budget(filter).subscribe((b) => this.budget.set(b));
+    this.reportApi.attendance(filter.from, filter.to).subscribe((a) => this.attendance.set(a));
     this.loadTrend();
     this.loadDetailed(filter);
   }

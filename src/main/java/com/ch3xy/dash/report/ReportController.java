@@ -1,6 +1,7 @@
 package com.ch3xy.dash.report;
 
 import com.ch3xy.dash.common.pagination.PageResponse;
+import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.report.dto.HeatmapResponse;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
@@ -103,6 +104,17 @@ public class ReportController {
     public ResponseEntity<HeatmapResponse> heatmap(
             @Parameter(description = "Kalenderjahr (z. B. 2025). Wenn nicht angegeben, wird das aktuelle Jahr verwendet.") @RequestParam(required = false) Integer year) {
         return ResponseEntity.ok(service.getHeatmap(year));
+    }
+
+    @Operation(
+            summary = "Anwesenheits-Report abrufen",
+            description = "Gibt für jeden Tag mit Zeiteinträgen den ersten Start, das letzte Ende, die erfasste Gesamtzeit und die nicht erfasste Zwischenzeit (Pausen) zurück. Ohne Zeitraum werden die letzten 30 Tage verwendet."
+    )
+    @GetMapping("/attendance")
+    public ResponseEntity<AttendanceResponse> attendance(
+            @Parameter(description = "Startdatum des Zeitraums (ISO-8601).") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Enddatum des Zeitraums (ISO-8601).") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(service.getAttendance(from, to));
     }
 
     @Operation(

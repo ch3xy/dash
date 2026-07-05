@@ -305,6 +305,20 @@ export interface TopClient {
   revenueAmount: string;
 }
 
+export interface AttendanceDay {
+  date: IsoDate;
+  firstStart: string;
+  lastEnd: string;
+  totalSeconds: number;
+  breakSeconds: number;
+}
+
+export interface AttendanceReport {
+  from: IsoDate;
+  to: IsoDate;
+  days: AttendanceDay[];
+}
+
 export interface Dashboard {
   today: PeriodStat;
   thisWeek: PeriodStat;
