@@ -140,6 +140,41 @@ public class TimeEntryService {
     }
 
     @Transactional
+    public void deleteAll(List<UUID> ids) {
+        List<TimeEntry> entries = repository.findAllById(ids);
+        if (entries.size() != new HashSet<>(ids).size()) {
+            throw new EntityNotFoundException("One or more time entries not found");
+        }
+        repository.deleteAll(entries);
+    }
+
+    /**
+     * Applies the set fields of the request to all given entries. Changing the
+     * billable flag recomputes the amount from the stored rate snapshot, so the
+     * historical rate stays intact.
+     */
+    @Transactional
+    public List<TimeEntryResponse> bulkUpdate(BulkUpdateRequest req) {
+        List<TimeEntry> entries = repository.findAllById(req.ids());
+        if (entries.size() != new HashSet<>(req.ids()).size()) {
+            throw new EntityNotFoundException("One or more time entries not found");
+        }
+        Set<Tag> tagsToAdd = req.addTagIds() != null && !req.addTagIds().isEmpty()
+                ? resolveTags(req.addTagIds()) : Set.of();
+        Set<UUID> tagIdsToRemove = req.removeTagIds() != null ? req.removeTagIds() : Set.of();
+        for (TimeEntry entry : entries) {
+            if (req.billable() != null) {
+                entry.setBillable(req.billable());
+                entry.setAmountSnapshot(computeAmount(req.billable(),
+                        entry.getDurationSeconds(), entry.getHourlyRateSnapshot()));
+            }
+            entry.getTags().addAll(tagsToAdd);
+            entry.getTags().removeIf(t -> tagIdsToRemove.contains(t.getId()));
+        }
+        return repository.saveAll(entries).stream().map(TimeEntryResponse::from).toList();
+    }
+
+    @Transactional
     public List<TimeEntryResponse> split(UUID id, Instant splitAt) {
         TimeEntry original = require(id);
         if (!splitAt.isAfter(original.getStartTime()) || !splitAt.isBefore(original.getEndTime())) {

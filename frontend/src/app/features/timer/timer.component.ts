@@ -75,10 +75,27 @@ interface EntryGroup {
       } @else if (entries().length === 0) {
         <div class="card state">Noch keine Einträge {{ viewDateLabel() === 'Heute' ? 'heute' : 'an diesem Tag' }}.</div>
       } @else {
+        @if (selected().size > 0) {
+          <div class="card card-pad row wrap gap-2 mt-4 bulk-bar">
+            <strong>{{ selected().size }} ausgewählt</strong>
+            <button class="btn btn-sm" (click)="bulkBillable(true)">Abrechenbar</button>
+            <button class="btn btn-sm" (click)="bulkBillable(false)">Nicht abrechenbar</button>
+            <select class="select btn-sm" style="width: auto;" [ngModel]="''" (ngModelChange)="bulkAddTag($event)">
+              <option value="" disabled>+ Tag…</option>
+              @for (t of allTags(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }
+            </select>
+            <button class="btn btn-sm btn-danger" (click)="bulkDelete()">Löschen</button>
+            <button class="btn btn-sm btn-ghost" style="margin-left: auto;" (click)="clearSelection()">Auswahl aufheben</button>
+          </div>
+        }
         <div class="card mt-4" style="overflow-x: auto;">
           <table class="table">
             <thead>
               <tr>
+                <th class="check-col">
+                  <input type="checkbox" [checked]="allSelected()" (change)="toggleSelectAll()"
+                         title="Alle auswählen" />
+                </th>
                 <th></th>
                 <th>Beschreibung</th>
                 <th>Projekt</th>
@@ -91,6 +108,9 @@ interface EntryGroup {
               @for (g of groupedEntries(); track g.key) {
                 <!-- Group header row -->
                 <tr class="group-row" [class.group-expanded]="expandedGroups().has(g.key)">
+                  <td class="check-col">
+                    <input type="checkbox" [checked]="groupSelected(g)" (change)="toggleGroupSelection(g)" />
+                  </td>
                   <td class="expand-col">
                     @if (g.entries.length > 1) {
                       <button class="btn btn-ghost btn-icon btn-sm"
@@ -155,6 +175,9 @@ interface EntryGroup {
                 @if (g.entries.length > 1 && expandedGroups().has(g.key)) {
                   @for (e of g.entries; track e.id) {
                     <tr class="sub-row">
+                      <td class="check-col">
+                        <input type="checkbox" [checked]="selected().has(e.id)" (change)="toggleSelection(e.id)" />
+                      </td>
                       <td></td>
                       <td class="faint" style="font-size: var(--fs-sm);">
                         @if (!e.billable) { <span class="badge muted">nicht abrechenbar</span> }
@@ -261,6 +284,9 @@ interface EntryGroup {
     }
   `,
   styles: [`
+    .check-col { width: 32px; text-align: center; }
+    .check-col input { cursor: pointer; }
+    .bulk-bar { align-items: center; }
     .expand-col { width: 28px; padding: 0 !important; }
     .group-row td { border-bottom: 1px solid var(--border); }
     .group-expanded td { border-bottom: none; }
@@ -303,6 +329,11 @@ export class TimerComponent {
   protected readonly showDialog = signal(false);
   protected readonly editingDescId = signal<string | null>(null);
   protected readonly expandedGroups = signal<Set<string>>(new Set());
+  protected readonly selected = signal<Set<string>>(new Set());
+
+  protected readonly allSelected = computed(
+    () => this.entries().length > 0 && this.selected().size === this.entries().length,
+  );
 
   protected readonly totalSeconds = computed(() =>
     this.entries().reduce((s, e) => s + e.durationSeconds, 0),
@@ -366,6 +397,78 @@ export class TimerComponent {
     this.api.list({ from: d, to: d, size: 200 }).subscribe({
       next: (page) => { this.entries.set(page.content); this.loading.set(false); },
       error: () => this.loading.set(false),
+    });
+    this.clearSelection();
+  }
+
+  clearSelection(): void {
+    this.selected.set(new Set());
+  }
+
+  toggleSelection(id: string): void {
+    this.selected.update((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  groupSelected(g: EntryGroup): boolean {
+    return g.entries.every((e) => this.selected().has(e.id));
+  }
+
+  toggleGroupSelection(g: EntryGroup): void {
+    const all = this.groupSelected(g);
+    this.selected.update((s) => {
+      const next = new Set(s);
+      for (const e of g.entries) {
+        if (all) next.delete(e.id); else next.add(e.id);
+      }
+      return next;
+    });
+  }
+
+  toggleSelectAll(): void {
+    if (this.allSelected()) {
+      this.clearSelection();
+    } else {
+      this.selected.set(new Set(this.entries().map((e) => e.id)));
+    }
+  }
+
+  bulkDelete(): void {
+    const ids = [...this.selected()];
+    this.dialog
+      .confirm({
+        title: 'Einträge löschen',
+        message: `${ids.length} Zeiteinträge löschen?`,
+        confirmLabel: 'Löschen',
+        danger: true,
+      })
+      .then((ok) => {
+        if (ok) {
+          this.api.deleteBulk(ids).subscribe(() => {
+            this.toast.success(`${ids.length} Einträge gelöscht`);
+            this.load();
+          });
+        }
+      });
+  }
+
+  bulkBillable(billable: boolean): void {
+    const ids = [...this.selected()];
+    this.api.updateBulk({ ids, billable }).subscribe(() => {
+      this.toast.success(`${ids.length} Einträge aktualisiert`);
+      this.load();
+    });
+  }
+
+  bulkAddTag(tagId: string): void {
+    if (!tagId) return;
+    const ids = [...this.selected()];
+    this.api.updateBulk({ ids, addTagIds: [tagId] }).subscribe(() => {
+      this.toast.success('Tag hinzugefügt');
+      this.load();
     });
   }
 

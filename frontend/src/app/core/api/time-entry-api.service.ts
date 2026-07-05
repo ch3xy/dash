@@ -47,6 +47,19 @@ export class TimeEntryApiService {
     return this.http.post<TimeEntry[]>('/time-entries/bulk', inputs);
   }
 
+  deleteBulk(ids: Uuid[]): Observable<void> {
+    return this.http.post<void>('/time-entries/bulk-delete', { ids });
+  }
+
+  updateBulk(input: {
+    ids: Uuid[];
+    billable?: boolean;
+    addTagIds?: Uuid[];
+    removeTagIds?: Uuid[];
+  }): Observable<TimeEntry[]> {
+    return this.http.post<TimeEntry[]>('/time-entries/bulk-update', input);
+  }
+
   update(id: Uuid, input: TimeEntryInput): Observable<TimeEntry> {
     return this.http.put<TimeEntry>(`/time-entries/${id}`, input);
   }

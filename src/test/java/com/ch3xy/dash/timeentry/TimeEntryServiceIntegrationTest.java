@@ -128,4 +128,50 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(service.findById(entry.id()).hourlyRateSnapshot()).isEqualByComparingTo("80.00");
     }
+
+    @Test
+    void bulkDeleteRemovesAllGivenEntries() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse e1 = service.create(new TimeEntryRequest(
+                project.id(), null, "a", START, END, true, Set.of()));
+        TimeEntryResponse e2 = service.create(new TimeEntryRequest(
+                project.id(), null, "b", START, END, true, Set.of()));
+
+        service.deleteAll(java.util.List.of(e1.id(), e2.id()));
+
+        var remaining = service.findAll(
+                new TimeEntryFilter(null, null, null, project.id(), null, null, null, null),
+                PageRequest.of(0, 20));
+        assertThat(remaining.getContent()).isEmpty();
+    }
+
+    @Test
+    void bulkDeleteWithUnknownIdDeletesNothing() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse e1 = service.create(new TimeEntryRequest(
+                project.id(), null, "a", START, END, true, Set.of()));
+
+        assertThatThrownBy(() -> service.deleteAll(
+                java.util.List.of(e1.id(), java.util.UUID.randomUUID())))
+                .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
+
+        assertThat(service.findById(e1.id())).isNotNull();
+    }
+
+    @Test
+    void bulkUpdateBillableRecomputesAmountFromSnapshotRate() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse e1 = service.create(new TimeEntryRequest(
+                project.id(), null, "a", START, END, true, Set.of()));
+        assertThat(e1.amountSnapshot()).isEqualByComparingTo("100.00");
+
+        var updated = service.bulkUpdate(new BulkUpdateRequest(
+                java.util.List.of(e1.id()), false, null, null));
+        assertThat(updated.getFirst().amountSnapshot()).isEqualByComparingTo("0.00");
+
+        updated = service.bulkUpdate(new BulkUpdateRequest(
+                java.util.List.of(e1.id()), true, null, null));
+        assertThat(updated.getFirst().amountSnapshot()).isEqualByComparingTo("100.00");
+        assertThat(updated.getFirst().hourlyRateSnapshot()).isEqualByComparingTo("50.00");
+    }
 }

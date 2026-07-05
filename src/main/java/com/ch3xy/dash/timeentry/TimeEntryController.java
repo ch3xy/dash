@@ -85,6 +85,33 @@ public class TimeEntryController {
     }
 
     @Operation(
+            summary = "Mehrere Zeiteinträge auf einmal löschen",
+            description = "Löscht alle Zeiteinträge mit den angegebenen IDs dauerhaft. Schlägt die Anfrage für eine ID fehl, wird nichts gelöscht."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Alle Zeiteinträge gelöscht"),
+            @ApiResponse(responseCode = "404", description = "Mindestens ein Zeiteintrag wurde nicht gefunden")
+    })
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<Void> deleteBulk(@Valid @RequestBody BulkDeleteRequest req) {
+        service.deleteAll(req.ids());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
+            summary = "Mehrere Zeiteinträge auf einmal ändern",
+            description = "Wendet die gesetzten Felder (Billable-Status, Tags hinzufügen/entfernen) auf alle angegebenen Zeiteinträge an. Bei Billable-Änderung wird der Umsatz-Snapshot aus dem gespeicherten Stundensatz neu berechnet."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Alle Zeiteinträge aktualisiert"),
+            @ApiResponse(responseCode = "404", description = "Mindestens ein Zeiteintrag oder Tag wurde nicht gefunden")
+    })
+    @PostMapping("/bulk-update")
+    public ResponseEntity<List<TimeEntryResponse>> updateBulk(@Valid @RequestBody BulkUpdateRequest req) {
+        return ResponseEntity.ok(service.bulkUpdate(req));
+    }
+
+    @Operation(
             summary = "Zuletzt verwendete Projekt/Task-Kombinationen abrufen",
             description = "Gibt die zuletzt genutzten Kombinationen aus Projekt, Task, Tags und Billable-Flag zurück. Nützlich für Schnellauswahl beim Starten eines neuen Timers."
     )
