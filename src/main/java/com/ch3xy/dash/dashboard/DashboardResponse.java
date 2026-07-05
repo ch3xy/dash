@@ -19,6 +19,7 @@ public record DashboardResponse(
 ) {
     public record PeriodStats(
             long durationSeconds,
+            long billableDurationSeconds,
             BigDecimal revenueAmount,
             String currencyCode
     ) {}

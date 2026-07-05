@@ -73,11 +73,13 @@ public class DashboardService {
                 .addValue("to", to);
         return jdbc.queryForObject("""
                 SELECT COALESCE(SUM(duration_seconds), 0) AS seconds,
+                       COALESCE(SUM(CASE WHEN billable THEN duration_seconds ELSE 0 END), 0) AS billable_seconds,
                        COALESCE(SUM(CASE WHEN billable THEN amount_snapshot ELSE 0 END), 0) AS revenue
                 FROM time_entries
                 WHERE entry_date >= CAST(:from AS date) AND entry_date <= CAST(:to AS date)
                 """, params, (rs, rowNum) -> new PeriodStats(
                 rs.getLong("seconds"),
+                rs.getLong("billable_seconds"),
                 rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP),
                 currency));
     }

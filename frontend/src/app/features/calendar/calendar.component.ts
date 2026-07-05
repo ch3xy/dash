@@ -437,9 +437,13 @@ export class CalendarComponent implements OnDestroy {
     this.lastDragActive = ix?.active ?? false;
     this.interact.set(null);
     if (!ix || !ix.active) {
-      // Touch tap without drag: open create or edit dialog
+      // Tap/click without drag: open create or edit dialog
       if (this.interactFromTouch) {
         if (ix?.kind === 'move') this.editEntry(ix.entry);
+      } else if (ix?.kind === 'create') {
+        // Simple click on empty grid: create dialog with 1h default (Clockify behavior)
+        const endMin = Math.min(ix.startMin + 60, 24 * 60);
+        this.openNewEntry(ix.colDate, ix.startMin, endMin);
       }
       this.interactFromTouch = false;
       return;

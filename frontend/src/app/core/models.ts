@@ -281,6 +281,7 @@ export interface HeatmapReport {
 
 export interface PeriodStat {
   durationSeconds: number;
+  billableDurationSeconds: number;
   revenueAmount: string;
 }
 

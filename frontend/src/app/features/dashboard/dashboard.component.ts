@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { RouterLink } from '@angular/router';
 import { DashboardApiService } from '../../core/api/dashboard-api.service';
 import { Dashboard } from '../../core/models';
+import { DonutGaugeComponent } from '../../shared/components/donut-gauge.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { timeOf } from '../../shared/utils/date-utils';
@@ -10,7 +11,7 @@ import { timeOf } from '../../shared/utils/date-utils';
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DecimalPipe, DurationPipe, MoneyPipe],
+  imports: [RouterLink, DecimalPipe, DurationPipe, MoneyPipe, DonutGaugeComponent],
   template: `
     <div class="page">
       <div class="page-header"><h1>Dashboard</h1></div>
@@ -61,6 +62,23 @@ import { timeOf } from '../../shared/utils/date-utils';
             } @else {
               <div class="muted">Alle Projekte im Budget.</div>
             }
+          </div>
+
+          <div class="card card-pad" style="display: flex; flex-direction: column;">
+            <div class="card-title">Billable-Quote (Woche)</div>
+            <div class="row gap-2" style="flex: 1; align-items: center; justify-content: space-around; flex-wrap: wrap;">
+              <app-donut-gauge [ratio]="billableRatio(d.thisWeek)" label="abrechenbar" />
+              <div>
+                <div class="row-between gap-2" style="min-width: 150px;">
+                  <span class="faint">Abrechenbar</span>
+                  <span class="mono">{{ d.thisWeek.billableDurationSeconds | duration: 'HH:MM' }}</span>
+                </div>
+                <div class="row-between gap-2">
+                  <span class="faint">Nicht abrechenbar</span>
+                  <span class="mono">{{ d.thisWeek.durationSeconds - d.thisWeek.billableDurationSeconds | duration: 'HH:MM' }}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="card card-pad">
@@ -157,5 +175,9 @@ export class DashboardComponent {
 
   protected time(instant: string): string {
     return timeOf(instant);
+  }
+
+  protected billableRatio(stat: { durationSeconds: number; billableDurationSeconds: number }): number {
+    return stat.durationSeconds > 0 ? stat.billableDurationSeconds / stat.durationSeconds : 0;
   }
 }
