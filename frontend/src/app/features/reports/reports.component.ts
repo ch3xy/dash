@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { ClientApiService } from '../../core/api/client-api.service';
+import { DialogService } from '../../core/dialog.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { ReportApiService } from '../../core/api/report-api.service';
 import {
@@ -76,6 +77,16 @@ type DetailRow =
           <input type="checkbox" [ngModel]="f().rounded === true" (ngModelChange)="patch({ rounded: $event })" /> Gerundet
         </label>
         <div class="row" style="align-self: flex-end; margin-left: auto;">
+          <select class="select btn-sm" style="width: auto; max-width: 160px;"
+                  [ngModel]="activeView()" (ngModelChange)="applyView($event)"
+                  title="Gespeicherte Ansicht laden">
+            <option value="">Ansicht…</option>
+            @for (v of savedViews(); track v.name) { <option [value]="v.name">{{ v.name }}</option> }
+          </select>
+          <button class="btn btn-sm" (click)="saveView()" title="Aktuelle Filter als Ansicht speichern">＋</button>
+          @if (activeView()) {
+            <button class="btn btn-sm btn-ghost" (click)="deleteView()" title="Ansicht löschen">🗑</button>
+          }
           <a class="btn btn-sm" [href]="csvUrl()">CSV</a>
           <a class="btn btn-sm" [href]="xlsxUrl()">XLSX</a>
         </div>
@@ -93,11 +104,11 @@ type DetailRow =
         <div class="grid grid-2col mt-4">
           <div class="card card-pad">
             <div class="card-title">Nach {{ s.groupedBy }} — Zeit</div>
-            <app-bar-chart [data]="groupBars(s)" />
+            <app-bar-chart [data]="groupBars(s)" [clickable]="drillable(s)" (barClick)="drillDown(s, $event)" />
           </div>
           <div class="card card-pad">
             <div class="card-title">Nach {{ s.groupedBy }} — Umsatz</div>
-            <app-bar-chart [data]="revenueBars(s)" />
+            <app-bar-chart [data]="revenueBars(s)" [clickable]="drillable(s)" (barClick)="drillDown(s, $event)" />
           </div>
         </div>
       }
@@ -259,6 +270,7 @@ export class ReportsComponent {
   private readonly clientApi = inject(ClientApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly dialog = inject(DialogService);
 
   protected readonly groupOptions = GROUP_OPTIONS;
   protected readonly projects = signal<Project[]>([]);
@@ -434,6 +446,7 @@ export class ReportsComponent {
       label: g.label,
       value: g.durationSeconds,
       display: new DurationPipe().transform(g.durationSeconds, 'HH:MM'),
+      key: g.key,
     }));
   }
 
@@ -442,7 +455,40 @@ export class ReportsComponent {
       label: g.label,
       value: Number(g.revenueAmount),
       display: new MoneyPipe().transform(g.revenueAmount, s.currencyCode),
+      key: g.key,
     }));
+  }
+
+  drillable(s: SummaryReport): boolean {
+    return ['PROJECT', 'CLIENT', 'DAY', 'WEEK', 'MONTH'].includes(s.groupedBy);
+  }
+
+  /** Click on a chart bar narrows the report filter to that group. */
+  drillDown(s: SummaryReport, d: BarDatum): void {
+    if (!d.key) return;
+    switch (s.groupedBy) {
+      case 'PROJECT':
+        this.patch({ projectId: d.key });
+        break;
+      case 'CLIENT':
+        this.patch({ clientId: d.key });
+        break;
+      case 'DAY':
+        this.patch({ from: d.key, to: d.key, groupBy: 'PROJECT' });
+        break;
+      case 'WEEK':
+        this.patch({ from: d.key, to: toIsoDate(addDays(new Date(d.key + 'T12:00:00'), 6)), groupBy: 'DAY' });
+        break;
+      case 'MONTH': {
+        const [y, m] = d.key.split('-').map(Number);
+        this.patch({
+          from: toIsoDate(new Date(y, m - 1, 1)),
+          to: toIsoDate(new Date(y, m, 0)),
+          groupBy: 'DAY',
+        });
+        break;
+      }
+    }
   }
 
   trendPoints(t: TrendReport): LinePoint[] {
@@ -460,6 +506,54 @@ export class ReportsComponent {
 
   min(a: number, b: number): number {
     return Math.min(a, b);
+  }
+
+  // --- Saved report views (localStorage — single-user app, no backend needed) ---
+
+  private static readonly VIEWS_KEY = 'dash.reportViews';
+  protected readonly savedViews = signal<Array<{ name: string; filter: ReportFilter }>>(this.readViews());
+  protected readonly activeView = signal('');
+
+  private readViews(): Array<{ name: string; filter: ReportFilter }> {
+    try {
+      return JSON.parse(localStorage.getItem(ReportsComponent.VIEWS_KEY) ?? '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  private writeViews(views: Array<{ name: string; filter: ReportFilter }>): void {
+    localStorage.setItem(ReportsComponent.VIEWS_KEY, JSON.stringify(views));
+    this.savedViews.set(views);
+  }
+
+  saveView(): void {
+    this.dialog
+      .prompt({ title: 'Ansicht speichern', label: 'Name der Ansicht', confirmLabel: 'Speichern' })
+      .then((name) => {
+        if (!name?.trim()) return;
+        const trimmed = name.trim();
+        const views = this.savedViews().filter((v) => v.name !== trimmed);
+        views.push({ name: trimmed, filter: this.f() });
+        this.writeViews(views);
+        this.activeView.set(trimmed);
+      });
+  }
+
+  applyView(name: string): void {
+    this.activeView.set(name);
+    const view = this.savedViews().find((v) => v.name === name);
+    if (!view) return;
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: view.filter as Record<string, unknown>,
+    });
+  }
+
+  deleteView(): void {
+    const name = this.activeView();
+    this.writeViews(this.savedViews().filter((v) => v.name !== name));
+    this.activeView.set('');
   }
 
   csvUrl(): string {
