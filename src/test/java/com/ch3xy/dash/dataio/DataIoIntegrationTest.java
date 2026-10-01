@@ -49,6 +49,31 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void clockifyReimportSkipsExistingEntriesAsDuplicates() {
+        String csv = """
+                Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time
+                ClkDup Project,ClkDup Client,first,,,Yes,2026-07-10,08:00:00,2026-07-10,10:00:00
+                ClkDup Project,ClkDup Client,second,,,Yes,2026-07-10,10:00:00,2026-07-10,11:00:00
+                ClkDup Project,ClkDup Client,second again,,,Yes,2026-07-10,10:00:00,2026-07-10,11:00:00
+                """;
+
+        ImportResult first = importService.importCsv(csv);
+        assertThat(first.importedEntries()).isEqualTo(2);
+        assertThat(first.skippedDuplicates()).isEqualTo(1); // duplicate row within the same file
+
+        String overlapping = csv + """
+                ClkDup Project,ClkDup Client,new,,,Yes,2026-07-10,11:00:00,2026-07-10,12:00:00
+                ClkDup Project,ClkDup Client,shorter,,,Yes,2026-07-10,08:00:00,2026-07-10,09:00:00
+                """;
+        ImportResult second = importService.importCsv(overlapping);
+
+        assertThat(second.importedEntries()).isEqualTo(2);   // new slot + same start but different end
+        assertThat(second.skippedDuplicates()).isEqualTo(3);
+        assertThat(second.createdProjects()).isZero();
+        assertThat(second.warnings()).isEmpty();
+    }
+
+    @Test
     void clockifyImportSkipsRowsWithInvalidInterval() {
         String csv = """
                 Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time

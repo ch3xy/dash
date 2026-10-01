@@ -14,7 +14,9 @@ import java.util.List;
 /**
  * Imports a Clockify "Detailed report" CSV. Each row is imported in its own
  * transaction (see {@link ClockifyRowImporter}) so a malformed row is skipped
- * with a warning rather than aborting the whole import.
+ * with a warning rather than aborting the whole import. Rows matching an existing
+ * entry (same project, start and end) are skipped as duplicates, so re-importing
+ * the same or an overlapping export is safe.
  */
 @Service
 public class ClockifyImportService {
@@ -29,6 +31,7 @@ public class ClockifyImportService {
         ImportCounters counters = new ImportCounters();
         List<String> warnings = new ArrayList<>();
         int imported = 0;
+        int duplicates = 0;
         int rowNumber = 1;
 
         CSVFormat format = CSVFormat.DEFAULT.builder()
@@ -42,10 +45,10 @@ public class ClockifyImportService {
             for (CSVRecord record : parser) {
                 rowNumber++;
                 try {
-                    if (rowImporter.importRow(record, counters)) {
-                        imported++;
-                    } else {
-                        warnings.add("Row " + rowNumber + ": skipped (missing or invalid start/end)");
+                    switch (rowImporter.importRow(record, counters)) {
+                        case IMPORTED -> imported++;
+                        case DUPLICATE -> duplicates++;
+                        case INVALID -> warnings.add("Row " + rowNumber + ": skipped (missing or invalid start/end)");
                     }
                 } catch (RuntimeException ex) {
                     warnings.add("Row " + rowNumber + ": " + ex.getMessage());
@@ -55,7 +58,7 @@ public class ClockifyImportService {
             throw new UncheckedIOException("Failed to read CSV", ex);
         }
 
-        return new ImportResult(imported, counters.clients, counters.projects,
+        return new ImportResult(imported, duplicates, counters.clients, counters.projects,
                 counters.tasks, counters.tags, warnings);
     }
 }

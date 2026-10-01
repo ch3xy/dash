@@ -52,7 +52,7 @@ public class DataIoController {
 
     @Operation(
             summary = "Clockify-CSV-Export importieren",
-            description = "Importiert Zeiteinträge aus einem Clockify-CSV-Export. Projekte und Kunden werden bei Bedarf automatisch angelegt. Bereits vorhandene Einträge (gleiche Startzeit und Projekt) werden übersprungen. Erwartet Content-Type text/plain oder text/csv."
+            description = "Importiert Zeiteinträge aus einem Clockify-CSV-Export. Projekte und Kunden werden bei Bedarf automatisch angelegt. Bereits vorhandene Einträge (gleiches Projekt, gleiche Start- und Endzeit) werden als Duplikate übersprungen. Erwartet Content-Type text/plain oder text/csv."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Import abgeschlossen, Ergebnis enthält Anzahl importierter und übersprungener Einträge"),

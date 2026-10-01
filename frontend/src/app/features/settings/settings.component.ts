@@ -114,7 +114,10 @@ export class SettingsComponent {
     file.text().then((csv) => {
       this.dataIo.importClockify(csv).subscribe({
         next: (res) => {
-          this.toast.success(`Import: ${res.imported} importiert, ${res.skipped} übersprungen`);
+          const invalid = res.warnings.length ? `, ${res.warnings.length} fehlerhaft` : '';
+          this.toast.success(
+            `Import: ${res.importedEntries} importiert, ${res.skippedDuplicates} Duplikate übersprungen${invalid}`,
+          );
           this.busy.set(false);
           input.value = '';
         },

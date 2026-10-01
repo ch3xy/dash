@@ -74,22 +74,25 @@ public class ClockifyRowImporter {
     }
 
     /**
-     * @return true if the row produced a time entry, false if it was skipped.
+     * @return whether the row produced a time entry or why it was skipped.
      * @throws RuntimeException if the row could not be imported (rolls this row back).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean importRow(CSVRecord record, ImportCounters counters) {
+    public RowOutcome importRow(CSVRecord record, ImportCounters counters) {
         ZoneId zone = settingsService.getTimezone();
         String currency = settingsService.getCurrency();
 
         Instant start = parseInstant(get(record, "Start Date"), get(record, "Start Time"), zone);
         Instant end = parseInstant(get(record, "End Date"), get(record, "End Time"), zone);
         if (start == null || end == null || !end.isAfter(start)) {
-            return false;
+            return RowOutcome.INVALID;
         }
 
         UUID clientId = findOrCreateClient(get(record, "Client"), currency, counters);
         UUID projectId = findOrCreateProject(get(record, "Project"), clientId, currency, counters);
+        if (timeEntryService.existsForInterval(projectId, start, end)) {
+            return RowOutcome.DUPLICATE;
+        }
         UUID taskId = findOrCreateTask(get(record, "Task"), projectId, counters);
         Set<UUID> tagIds = findOrCreateTags(get(record, "Tags"), counters);
         boolean billable = "Yes".equalsIgnoreCase(get(record, "Billable"));
@@ -98,7 +101,7 @@ public class ClockifyRowImporter {
                 projectId, taskId, get(record, "Description"),
                 start, end, billable, tagIds
         ), TimeEntrySource.IMPORT);
-        return true;
+        return RowOutcome.IMPORTED;
     }
 
     private UUID findOrCreateClient(String name, String currency, ImportCounters counters) {

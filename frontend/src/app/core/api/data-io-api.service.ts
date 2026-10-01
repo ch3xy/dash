@@ -3,9 +3,13 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export interface ClockifyImportResult {
-  imported: number;
-  skipped: number;
-  errors?: string[];
+  importedEntries: number;
+  skippedDuplicates: number;
+  createdClients: number;
+  createdProjects: number;
+  createdTasks: number;
+  createdTags: number;
+  warnings: string[];
 }
 
 export interface RestoreResult {

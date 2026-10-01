@@ -4,6 +4,7 @@ import java.util.List;
 
 public record ImportResult(
         int importedEntries,
+        int skippedDuplicates,
         int createdClients,
         int createdProjects,
         int createdTasks,

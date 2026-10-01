@@ -100,6 +100,11 @@ public class TimeEntryService {
         return TimeEntryResponse.from(require(id));
     }
 
+    /** True if an entry for this project with exactly this interval already exists (import dedup). */
+    public boolean existsForInterval(UUID projectId, Instant start, Instant end) {
+        return repository.existsByProjectIdAndStartTimeAndEndTime(projectId, start, end);
+    }
+
     @Transactional
     public TimeEntryResponse create(TimeEntryRequest req) {
         return create(req, TimeEntrySource.MANUAL);
