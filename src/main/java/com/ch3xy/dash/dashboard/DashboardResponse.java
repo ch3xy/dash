@@ -4,13 +4,15 @@ import com.ch3xy.dash.timeentry.TimeEntryResponse;
 import com.ch3xy.dash.timer.TimerResponse;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 public record DashboardResponse(
         PeriodStats today,
-        PeriodStats thisWeek,
-        PeriodStats thisMonth,
+        LocalDate from,
+        LocalDate to,
+        PeriodStats period,
         TimerResponse runningTimer,
         List<BudgetAlert> budgetAlerts,
         List<TopProject> topProjects,

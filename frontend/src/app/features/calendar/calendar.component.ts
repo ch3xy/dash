@@ -4,10 +4,15 @@ import {
   HostListener,
   OnDestroy,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
+import { map } from 'rxjs';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { TagApiService } from '../../core/api/tag-api.service';
 import { TaskApiService } from '../../core/api/task-api.service';
@@ -15,8 +20,10 @@ import { TimeEntryApiService } from '../../core/api/time-entry-api.service';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
 import { Project, Tag, Task, TimeEntry, TimeEntryInput, Uuid } from '../../core/models';
+import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
-import { addDays, startOfWeek, timeOf, toInstant, toIsoDate } from '../../shared/utils/date-utils';
+import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
+import { addDays, timeOf, toInstant, toIsoDate } from '../../shared/utils/date-utils';
 
 const HOUR_PX = 44;
 const SNAP_MIN = 15;
@@ -44,16 +51,13 @@ type Interact =
 @Component({
   selector: 'app-calendar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DurationPipe, FormsModule],
+  imports: [DurationPipe, FormsModule, DateRangePickerComponent],
   template: `
     <div class="page">
       <div class="page-header">
         <h1>Kalender</h1>
         <div class="row">
-          <button class="btn btn-sm" (click)="shift(-7)">←</button>
-          <span class="mono">{{ weekLabel() }}</span>
-          <button class="btn btn-sm" (click)="shift(7)">→</button>
-          <button class="btn btn-sm" (click)="goToday()">Heute</button>
+          <app-date-range-picker mode="week" ariaLabel="Woche" [range]="week()" (rangeChange)="setWeek($event)" />
         </div>
       </div>
 
@@ -259,11 +263,21 @@ export class CalendarComponent implements OnDestroy {
   private readonly tagApi = inject(TagApiService);
   private readonly toast = inject(ToastService);
   private readonly dialogSvc = inject(DialogService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly hourPx = HOUR_PX;
   protected readonly hours = Array.from({ length: 24 }, (_, i) => i);
   protected readonly loading = signal(true);
-  protected weekStart = startOfWeek(new Date());
+  /** Displayed Mon–Sun week from the URL (?week=YYYY-MM-DD), defaulting to the current week. */
+  protected readonly week = toSignal(
+    this.route.queryParamMap.pipe(map((p) => weekRange(p.get('week') || toIsoDate(new Date())))),
+    { initialValue: weekRange(toIsoDate(new Date())) },
+  );
+
+  protected get weekStart(): Date {
+    return parseIsoDate(this.week().from);
+  }
   protected readonly todayIso = toIsoDate(new Date());
   private readonly nowMinutes = signal(this.currentMinutes());
 
@@ -284,11 +298,6 @@ export class CalendarComponent implements OnDestroy {
   protected formDate = '';
   protected formStart = '';
   protected formEnd = '';
-
-  protected readonly weekLabel = computed(() => {
-    const end = addDays(this.weekStart, 6);
-    return `${this.weekStart.toLocaleDateString('de-AT')} – ${end.toLocaleDateString('de-AT')}`;
-  });
 
   protected readonly columns = computed<DayColumn[]>(() => {
     const cols: DayColumn[] = [];
@@ -314,7 +323,10 @@ export class CalendarComponent implements OnDestroy {
   });
 
   constructor() {
-    this.load();
+    effect(() => {
+      this.week();
+      untracked(() => this.load());
+    });
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
     setInterval(() => this.nowMinutes.set(this.currentMinutes()), 60_000);
@@ -339,8 +351,9 @@ export class CalendarComponent implements OnDestroy {
     });
   }
 
-  shift(days: number): void { this.weekStart = addDays(this.weekStart, days); this.load(); }
-  goToday(): void { this.weekStart = startOfWeek(new Date()); this.load(); }
+  protected setWeek(range: DateRange): void {
+    this.router.navigate([], { relativeTo: this.route, queryParams: { week: range.from }, queryParamsHandling: 'merge' });
+  }
 
   // ─── Block layout (overlap columns) ────────────────────────────────────────
 

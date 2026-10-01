@@ -43,10 +43,18 @@ public class DashboardService {
         this.timeEntryRepository = timeEntryRepository;
     }
 
-    public DashboardResponse getDashboard() {
+    /**
+     * Dashboard for the given period (inclusive). Without dates the current week
+     * (Mon–Sun, app timezone) is used. "Today", the running timer, budget alerts and
+     * the most recent entries always refer to now, independent of the period.
+     */
+    public DashboardResponse getDashboard(LocalDate from, LocalDate to) {
         LocalDate today = LocalDate.now(settingsService.getTimezone());
-        LocalDate weekStart = today.with(DayOfWeek.MONDAY);
-        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate periodFrom = from != null ? from : today.with(DayOfWeek.MONDAY);
+        LocalDate periodTo = to != null ? to : periodFrom.plusDays(6);
+        if (periodTo.isBefore(periodFrom)) {
+            throw new IllegalArgumentException("to must not be before from");
+        }
         String currency = settingsService.getCurrency();
 
         List<TimeEntryResponse> recentEntries = timeEntryRepository
@@ -57,12 +65,13 @@ public class DashboardService {
 
         return new DashboardResponse(
                 periodStats(today, today, currency),
-                periodStats(weekStart, today, currency),
-                periodStats(monthStart, today, currency),
+                periodFrom,
+                periodTo,
+                periodStats(periodFrom, periodTo, currency),
                 timerService.findCurrent().orElse(null),
                 budgetAlerts(),
-                topProjects(today.minusDays(30), today),
-                topClients(today.minusDays(30), today, currency),
+                topProjects(periodFrom, periodTo),
+                topClients(periodFrom, periodTo, currency),
                 recentEntries
         );
     }

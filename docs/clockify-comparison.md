@@ -53,7 +53,8 @@ Stand: 2026-10-01
 | Report-Filter in URL persistent | ✅ | ✅ |
 | Gerundete Dauern umschaltbar | ✅ | ✅ |
 | CSV-/XLSX-Export | ✅ | ✅ |
-| Dashboard (Heute/Woche/Monat) | ✅ | ✅ |
+| Dashboard mit frei wählbarem Zeitraum | ✅ | ✅ |
+| Datumsauswahl mit Presets + Kalender (Dashboard, Reports, Timesheet, Kalender) | ✅ | ✅ |
 | Dashboard: Billable-Quote-Gauge | ✅ | ✅ |
 | Dashboard: Letzte Einträge | ✅ | ✅ |
 | Budget-Warnungen (Dashboard) | ✅ | ✅ |

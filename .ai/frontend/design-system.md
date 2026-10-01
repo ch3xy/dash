@@ -141,6 +141,28 @@ export const PROJECT_COLORS = [
 }
 ```
 
+### Zeitraum-Auswahl (`app-date-range-picker`)
+
+`shared/components/date-range-picker.component.ts`, Logik in `shared/utils/date-range.ts` (getestet).
+Eingesetzt in Dashboard, Reports, Timesheet und Kalender.
+
+```html
+<app-date-range-picker [(range)]="range" />                         <!-- freier Zeitraum -->
+<app-date-range-picker mode="week" [range]="week()" (rangeChange)="setWeek($event)" />
+<app-date-range-picker size="md" ... />                               <!-- 38px, in Filterleisten -->
+```
+
+- Trigger: `‹` · Kalender-Icon + Preset-Name bzw. Zeitraum (+ `KW n` im Wochenmodus) · `›`.
+  Die Pfeile springen um die Länge des Zeitraums; ganze Monate, Quartale und Jahre bleiben dabei kalendertreu.
+- Popover: Preset-Liste (Heute … Letztes Jahr bzw. Diese/Letzte/Nächste Woche) + Monatskalender mit KW-Spalte,
+  Wochenbeginn Montag. Im Zeitraummodus wählen zwei Klicks den Zeitraum (mit Hover-Vorschau),
+  im Wochenmodus wählt ein Klick die ganze Woche.
+- Tastatur: Pfeile ±1/±7 Tage, Home/End Wochenanfang/-ende, PageUp/PageDown ±1 Monat (+Shift ±1 Jahr),
+  Enter/Space wählt, Escape schließt und gibt den Fokus an den Trigger zurück.
+- Platzierung: unter dem Trigger, bei zu wenig Platz darüber, Höhe auf den Viewport begrenzt.
+  ≤ 640px wird das Popover zum Bottom Sheet mit Preset-Chips und 44px-Touch-Targets.
+- Zustand liegt in der URL: `?from=&to=` (Dashboard, Reports) bzw. `?week=` (Timesheet, Kalender).
+
 ---
 
 ## Dark / Light Mode

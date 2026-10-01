@@ -31,6 +31,8 @@ import { BarChartComponent, BarDatum } from '../../shared/components/bar-chart.c
 import { LineChartComponent, LinePoint } from '../../shared/components/line-chart.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
+import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
+import { DateRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
 
 const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'];
@@ -43,15 +45,17 @@ type DetailRow =
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent],
+  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent, DateRangePickerComponent],
   template: `
     <div class="page">
       <div class="page-header"><h1>Reports</h1></div>
 
       <!-- Filter bar -->
       <div class="card card-pad filter-bar">
-        <div class="field"><label>Von</label><input class="input" type="date" [ngModel]="f().from" (ngModelChange)="patch({ from: $event })" /></div>
-        <div class="field"><label>Bis</label><input class="input" type="date" [ngModel]="f().to" (ngModelChange)="patch({ to: $event })" /></div>
+        <div class="field field-range">
+          <label>Zeitraum</label>
+          <app-date-range-picker size="md" [range]="range()" (rangeChange)="patch($event)" />
+        </div>
         <div class="field">
           <label>Kunde</label>
           <select class="select" [ngModel]="f().clientId" (ngModelChange)="patch({ clientId: $event })">
@@ -301,6 +305,7 @@ type DetailRow =
     @media (max-width: 640px) {
       .filter-bar { position: static; gap: var(--sp-2); }
       .filter-bar .field { flex: 1 1 calc(50% - var(--sp-2)); min-width: 130px; }
+      .filter-bar .field-range { flex-basis: 100%; }
     }
     .group-hd-row td { background: color-mix(in srgb, var(--brand) 6%, var(--surface)); border-top: 2px solid var(--border); padding: var(--sp-2) var(--sp-3) !important; }
     .subtotal-row td { background: color-mix(in srgb, var(--brand) 3%, var(--surface)); font-weight: 600; border-top: 1px dashed var(--border); }
@@ -437,6 +442,12 @@ export class ReportsComponent {
     this.route.queryParams.pipe(map((p) => this.parse(p))),
     { initialValue: this.defaultFilter() },
   );
+
+  protected readonly range = computed<DateRange>(() => {
+    const { from, to } = this.f();
+    const def = this.defaultFilter();
+    return { from: from ?? def.from!, to: to ?? def.to! };
+  });
 
   protected readonly billableStr = computed(() => {
     const b = this.f().billable;

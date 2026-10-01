@@ -321,8 +321,10 @@ export interface AttendanceReport {
 
 export interface Dashboard {
   today: PeriodStat;
-  thisWeek: PeriodStat;
-  thisMonth: PeriodStat;
+  /** Selected period (defaults to the current Mon–Sun week). */
+  from: IsoDate;
+  to: IsoDate;
+  period: PeriodStat;
   runningTimer: RunningTimer | null;
   budgetAlerts: BudgetAlert[];
   topProjects: TopProject[];

@@ -1,5 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { map } from 'rxjs';
 import { ReportApiService } from '../../core/api/report-api.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { TaskApiService } from '../../core/api/task-api.service';
@@ -7,8 +10,10 @@ import { TimesheetApiService } from '../../core/api/timesheet-api.service';
 import { Project, Task, WeeklyReport } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
-import { addDays, startOfWeek, toIsoDate } from '../../shared/utils/date-utils';
+import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
+import { addDays, toIsoDate } from '../../shared/utils/date-utils';
 
 interface Row {
   key: string;
@@ -51,16 +56,13 @@ export function parseDuration(input: string): number | null {
 @Component({
   selector: 'app-timesheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe],
+  imports: [FormsModule, DurationPipe, DateRangePickerComponent],
   template: `
     <div class="page">
       <div class="page-header">
         <h1>Timesheet</h1>
         <div class="row">
-          <button class="btn btn-sm" (click)="shift(-7)" aria-label="Vorige Woche">←</button>
-          <span class="mono">{{ weekLabel() }}</span>
-          <button class="btn btn-sm" (click)="shift(7)" aria-label="Nächste Woche">→</button>
-          <button class="btn btn-sm" (click)="goToday()">Heute</button>
+          <app-date-range-picker mode="week" ariaLabel="Woche" [range]="week()" (rangeChange)="setWeek($event)" />
           <button class="btn btn-sm" (click)="copyPreviousWeek()" [disabled]="saving()">Vorwoche kopieren</button>
         </div>
       </div>
@@ -160,13 +162,23 @@ export class TimesheetComponent {
   private readonly timesheetApi = inject(TimesheetApiService);
   private readonly toast = inject(ToastService);
   private readonly dialog = inject(DialogService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly report = signal<WeeklyReport | null>(null);
   protected readonly projects = signal<Project[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal(false);
   protected readonly saving = signal(false);
-  protected weekStart = startOfWeek(new Date());
+  /** Displayed Mon–Sun week from the URL (?week=YYYY-MM-DD), defaulting to the current week. */
+  protected readonly week = toSignal(
+    this.route.queryParamMap.pipe(map((p) => weekRange(p.get('week') || toIsoDate(new Date())))),
+    { initialValue: weekRange(toIsoDate(new Date())) },
+  );
+
+  protected get weekStart(): Date {
+    return parseIsoDate(this.week().from);
+  }
   private readonly extraRows = signal<ExtraRow[]>([]);
   private readonly taskNames = signal<Record<string, string>>({});
 
@@ -209,12 +221,6 @@ export class TimesheetComponent {
     );
   });
 
-  protected readonly weekLabel = computed(() => {
-    this.report();
-    const end = addDays(this.weekStart, 6);
-    return `${this.weekStart.toLocaleDateString('de-AT')} – ${end.toLocaleDateString('de-AT')}`;
-  });
-
   constructor() {
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     effect(() => {
@@ -225,7 +231,10 @@ export class TimesheetComponent {
         this.taskApi.getForProject(projectId).subscribe((t) => this.newTasks.set(t));
       }
     });
-    this.load();
+    effect(() => {
+      this.week();
+      untracked(() => this.load());
+    });
   }
 
   load(): void {
@@ -243,14 +252,8 @@ export class TimesheetComponent {
     });
   }
 
-  shift(days: number): void {
-    this.weekStart = addDays(this.weekStart, days);
-    this.load();
-  }
-
-  goToday(): void {
-    this.weekStart = startOfWeek(new Date());
-    this.load();
+  protected setWeek(range: DateRange): void {
+    this.router.navigate([], { relativeTo: this.route, queryParams: { week: range.from }, queryParamsHandling: 'merge' });
   }
 
   dayLabel(iso: string): string {

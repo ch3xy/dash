@@ -535,21 +535,32 @@ Body: Identisches Objekt.
 
 ## Dashboard
 
-### `GET /dashboard` → `200`
+### `GET /dashboard?from=&to=` → `200`
+
+| Parameter | Typ | Default | Beschreibung |
+|---|---|---|---|
+| `from` | `YYYY-MM-DD` | Montag der aktuellen Woche | Beginn des Auswertungszeitraums (inklusiv) |
+| `to` | `YYYY-MM-DD` | `from + 6 Tage` | Ende des Auswertungszeitraums (inklusiv) |
+
+`to` vor `from` → `422`. `today` ist unabhängig vom Zeitraum immer der heutige Tag (App-Zeitzone);
+`period`, `topProjects` und `topClients` beziehen sich auf `from`–`to`. Budget-Warnungen folgen dem
+Budget-Reset des Projekts, nicht dem Zeitraum.
 
 ```json
 {
   "today": {
     "durationSeconds": 14400,
-    "revenueAmount": "1020.00"
+    "billableDurationSeconds": 10800,
+    "revenueAmount": "1020.00",
+    "currencyCode": "EUR"
   },
-  "thisWeek": {
+  "from": "2026-09-28",
+  "to": "2026-10-04",
+  "period": {
     "durationSeconds": 72000,
-    "revenueAmount": "5100.00"
-  },
-  "thisMonth": {
-    "durationSeconds": 288000,
-    "revenueAmount": "20400.00"
+    "billableDurationSeconds": 61200,
+    "revenueAmount": "5100.00",
+    "currencyCode": "EUR"
   },
   "runningTimer": { /* TimerResponse oder null */ },
   "budgetAlerts": [
@@ -560,7 +571,8 @@ Body: Identisches Objekt.
   ],
   "topClients": [
     { "clientId": "uuid", "clientName": "string", "revenueAmount": "2040.00" }
-  ]
+  ],
+  "recentEntries": [ /* TimeEntryResponse[] */ ]
 }
 ```
 
