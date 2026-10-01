@@ -6,11 +6,12 @@ import { AppSettings, RoundingRule } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
 import { LucideDownload } from '@lucide/angular';
+import { FileDropzoneComponent } from '../../shared/components/file-dropzone.component';
 
 @Component({
   selector: 'app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, LucideDownload],
+  imports: [FormsModule, LucideDownload, FileDropzoneComponent],
   template: `
     <div class="page" style="max-width: 720px;">
       <div class="page-header"><h1>Einstellungen</h1></div>
@@ -55,13 +56,27 @@ import { LucideDownload } from '@lucide/angular';
           Backup-JSON hochladen. <strong>Achtung:</strong> ersetzt alle vorhandenen Daten
           unwiderruflich.
         </p>
-        <input type="file" accept="application/json,.json" (change)="onRestoreFile($event)" [disabled]="busy()" />
+        <app-file-dropzone
+          accept=".json,application/json"
+          label="Backup-Datei wiederherstellen"
+          hint="JSON-Backup aus „Backup exportieren“"
+          [disabled]="busy()"
+          (fileSelected)="onRestoreFile($event)"
+          (rejected)="onRejected($event, 'JSON')"
+        />
       </div>
 
       <div class="card card-pad mt-4">
         <div class="card-title">Clockify-Import</div>
         <p class="muted">Clockify-CSV-Export hochladen. Kunden, Projekte, Tasks und Tags werden automatisch angelegt.</p>
-        <input type="file" accept=".csv,text/csv" (change)="onFile($event)" [disabled]="busy()" />
+        <app-file-dropzone
+          accept=".csv,text/csv"
+          label="Clockify-CSV importieren"
+          hint="Bereits vorhandene Einträge werden als Duplikate übersprungen"
+          [disabled]="busy()"
+          (fileSelected)="onImportFile($event)"
+          (rejected)="onRejected($event, 'CSV')"
+        />
       </div>
     </div>
   `,
@@ -104,12 +119,11 @@ export class SettingsComponent {
     });
   }
 
-  onFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) {
-      return;
-    }
+  onRejected(file: File, expected: string): void {
+    this.toast.error(`„${file.name}“ ist keine ${expected}-Datei.`);
+  }
+
+  onImportFile(file: File): void {
     this.busy.set(true);
     file.text().then((csv) => {
       this.dataIo.importClockify(csv).subscribe({
@@ -119,40 +133,29 @@ export class SettingsComponent {
             `Import: ${res.importedEntries} importiert, ${res.skippedDuplicates} Duplikate übersprungen${invalid}`,
           );
           this.busy.set(false);
-          input.value = '';
         },
-        error: () => {
-          this.busy.set(false);
-          input.value = '';
-        },
+        error: () => this.busy.set(false),
       });
     });
   }
 
-  onRestoreFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) {
-      return;
-    }
+  onRestoreFile(file: File): void {
     this.dialog
       .confirm({
         title: 'Wiederherstellen',
-        message: 'Alle vorhandenen Daten werden durch das Backup ersetzt. Fortfahren?',
+        message: `Alle vorhandenen Daten werden durch das Backup „${file.name}“ ersetzt. Fortfahren?`,
         confirmLabel: 'Ersetzen',
         danger: true,
       })
       .then((ok) => {
-        if (!ok) {
-          input.value = '';
-          return;
+        if (ok) {
+          this.busy.set(true);
+          this.runRestore(file);
         }
-        this.busy.set(true);
-        this.runRestore(file, input);
       });
   }
 
-  private runRestore(file: File, input: HTMLInputElement): void {
+  private runRestore(file: File): void {
     file.text().then((text) => {
       let doc: unknown;
       try {
@@ -160,7 +163,6 @@ export class SettingsComponent {
       } catch {
         this.toast.error('Ungültige JSON-Datei.');
         this.busy.set(false);
-        input.value = '';
         return;
       }
       this.dataIo.restore(doc).subscribe({
@@ -169,12 +171,8 @@ export class SettingsComponent {
             `Wiederhergestellt: ${r.projects} Projekte, ${r.timeEntries} Einträge`,
           );
           this.busy.set(false);
-          input.value = '';
         },
-        error: () => {
-          this.busy.set(false);
-          input.value = '';
-        },
+        error: () => this.busy.set(false),
       });
     });
   }
