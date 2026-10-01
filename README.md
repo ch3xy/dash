@@ -56,6 +56,7 @@ frontend/src/app/
   leitet `/api` an den Backend-Port weiter (`frontend/proxy.conf.json`).
 - Kein UI-Framework (Material/PrimeNG): eigenes Design-System in `src/styles.scss`
   mit Light/Dark-Theme; Charts als leichtgewichtiges HTML/SVG ohne Chart-Library.
+- Icons: Lucide über `@lucide/angular` (tree-shakable, Defaults in `app.config.ts`).
 
 ## Deployment unter `/dash`
 

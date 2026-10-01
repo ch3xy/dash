@@ -17,11 +17,12 @@ import { KeyboardShortcutService } from '../keyboard-shortcut.service';
 import { TimerStateService } from '../timer-state.service';
 import { ToastService } from '../toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
+import { LucidePlay, LucideSquare, LucideX } from '@lucide/angular';
 
 @Component({
   selector: 'app-timer-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe],
+  imports: [FormsModule, DurationPipe, LucidePlay, LucideSquare, LucideX],
   template: `
     <div class="timer-bar">
       @if (timerState.isRunning(); as _) {
@@ -31,8 +32,8 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
                placeholder="Woran arbeitest du?" />
         <span class="proj mono">{{ t?.projectName }}</span>
         <span class="elapsed mono">{{ timerState.elapsedSeconds() | duration }}</span>
-        <button class="btn btn-danger btn-sm" (click)="stop()" title="Timer stoppen (s)">■ Stop</button>
-        <button class="btn btn-ghost btn-sm" (click)="discard()" title="Verwerfen">✕</button>
+        <button class="btn btn-danger btn-sm" (click)="stop()" title="Timer stoppen (s)"><svg lucideSquare fill="currentColor"></svg> Stop</button>
+        <button class="btn btn-ghost btn-sm" (click)="discard()" title="Verwerfen" aria-label="Timer verwerfen"><svg lucideX></svg></button>
       } @else {
         <input #descInput class="input desc" [(ngModel)]="description" placeholder="Woran arbeitest du?"
                (keydown.enter)="start()" />
@@ -81,7 +82,7 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
           <input type="checkbox" [(ngModel)]="billable" />
           <span class="faint">€</span>
         </label>
-        <button class="btn btn-primary btn-sm" (click)="start()" [disabled]="!projectId" title="Timer starten (s)">▶ Start</button>
+        <button class="btn btn-primary btn-sm" (click)="start()" [disabled]="!projectId" title="Timer starten (s)"><svg lucidePlay></svg> Start</button>
       }
     </div>
   `,

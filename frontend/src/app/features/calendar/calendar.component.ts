@@ -24,6 +24,7 @@ import { DateRangePickerComponent } from '../../shared/components/date-range-pic
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toInstant, toIsoDate } from '../../shared/utils/date-utils';
+import { LucideX } from '@lucide/angular';
 
 const HOUR_PX = 44;
 const SNAP_MIN = 15;
@@ -51,7 +52,7 @@ type Interact =
 @Component({
   selector: 'app-calendar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DurationPipe, FormsModule, DateRangePickerComponent],
+  imports: [DurationPipe, FormsModule, DateRangePickerComponent, LucideX],
   template: `
     <div class="page">
       <div class="page-header">
@@ -146,7 +147,7 @@ type Interact =
         <div class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h3>{{ editingId() ? 'Eintrag bearbeiten' : 'Neuer Eintrag' }}</h3>
-            <button class="btn btn-ghost btn-icon" (click)="closeDialog()">✕</button>
+            <button class="btn btn-ghost btn-icon" (click)="closeDialog()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
             <div class="field">

@@ -16,19 +16,20 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
+import { LucideArrowLeft, LucidePlus, LucideX } from '@lucide/angular';
 
 type Tab = 'tasks' | 'rates';
 
 @Component({
   selector: 'app-project-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, DurationPipe, MoneyPipe],
+  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, DurationPipe, MoneyPipe, LucideArrowLeft, LucidePlus, LucideX],
   template: `
     <div class="page">
       @if (project(); as p) {
         <div class="page-header">
           <div>
-            <a routerLink="/projects" class="muted">← Projekte</a>
+            <a routerLink="/projects" class="muted back-link"><svg lucideArrowLeft></svg> Projekte</a>
             <h1 class="row gap-2">
               <span class="badge-dot" [style.background]="p.color || 'var(--brand)'"></span>{{ p.name }}
             </h1>
@@ -69,7 +70,7 @@ type Tab = 'tasks' | 'rates';
           <div class="card card-pad mt-4">
             <div class="row" style="margin-bottom: var(--sp-4)">
               <input class="input" [(ngModel)]="newTask" placeholder="Task-Name" (keydown.enter)="addTask()" />
-              <button class="btn btn-primary" (click)="addTask()" [disabled]="!newTask.trim()">+ Task</button>
+              <button class="btn btn-primary" (click)="addTask()" [disabled]="!newTask.trim()"><svg lucidePlus></svg> Task</button>
             </div>
             @if (tasks().length === 0) { <div class="muted">Noch keine Tasks.</div> }
             @for (t of tasks(); track t.id) {
@@ -126,7 +127,7 @@ type Tab = 'tasks' | 'rates';
         <div class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h3>Task bearbeiten</h3>
-            <button class="btn btn-ghost btn-icon" (click)="closeTask()">✕</button>
+            <button class="btn btn-ghost btn-icon" (click)="closeTask()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
             <div class="field"><label>Name *</label><input class="input" [(ngModel)]="taskForm.name" /></div>

@@ -4,12 +4,13 @@
 
 ## UI-Bibliothek
 
-**Empfehlung: Angular Material 22**
-- Gut in Angular integriert, Theme-System robust.
-- Dark/Light Mode via `@angular/material` Theme.
-- Alternativ: PrimeNG (mehr Komponenten, aber schwerer).
-
-Entscheidung vor Phase 0 treffen. Standard: Angular Material.
+**Entscheidung: kein UI-Framework** (weder Angular Material noch PrimeNG).
+- Eigenes, schlankes Design-System in `frontend/src/styles.scss`: CSS-Custom-Properties (Tokens)
+  plus Utility- und Komponentenklassen (`.card`, `.btn`, `.badge`, `.table`, `.dialog` …).
+- Eigene Standalone-Komponenten für die Bausteine, die Material/PrimeNG sonst liefern würden,
+  z. B. `app-date-range-picker`, Charts, Dialog- und Toast-Host.
+- Icons: Lucide (`@lucide/angular`), siehe Abschnitt „Icons (Lucide)“.
+- Neue Styles nutzen immer die Tokens (`--sp-*`, `--radius*`, `--fs-*`, Farben), keine Hardcode-Werte.
 
 ---
 
@@ -163,35 +164,36 @@ Eingesetzt in Dashboard, Reports, Timesheet und Kalender.
   ≤ 640px wird das Popover zum Bottom Sheet mit Preset-Chips und 44px-Touch-Targets.
 - Zustand liegt in der URL: `?from=&to=` (Dashboard, Reports) bzw. `?week=` (Timesheet, Kalender).
 
+### Icons (Lucide)
+
+- Bibliothek: `@lucide/angular`. Keine Unicode-Glyphen (▶ ✕ ✎ …) und keine handgeschriebenen Inline-SVGs als Icons.
+- Pro Icon die Komponente importieren und als Attribut auf `<svg>` nutzen: `<svg lucidePlay></svg>`
+  (Import `LucidePlay` in `imports` der Komponente). Dynamisch (z. B. Navigation): `<svg [lucideIcon]="item.icon"></svg>`
+  mit `LucideDynamicIcon` und Typ `LucideIcon`.
+- Defaults global in `app.config.ts`: `provideLucideConfig({ size: 16, strokeWidth: 1.75 })`.
+  Navigation und Topbar-Aktionen nutzen `[size]="18"`, das Brand-Icon `22`.
+- Farbe kommt über `currentColor` aus dem Text des Elternelements, also keine Farben am Icon selbst setzen.
+- Icons ohne `title` sind automatisch `aria-hidden`. Reine Icon-Buttons brauchen deshalb immer ein `aria-label`
+  (zusätzlich `title` für den Tooltip).
+- Zuordnung: Play = Start/Fortsetzen, Square = Stop, X = Schließen/Verwerfen, Pencil = Bearbeiten, Copy = Duplizieren,
+  Split = Aufteilen, Plus = Neu anlegen, Chevron* = Blättern/Aufklappen, Arrow* = Navigation zu anderer Seite.
+
 ---
 
 ## Dark / Light Mode
 
-Angular Material Theming:
+Umsetzung über CSS-Custom-Properties in `styles.scss`:
 
 ```scss
-// styles.scss
-@use '@angular/material' as mat;
-
-$light-theme: mat.define-theme((
-  color: (
-    theme-type: light,
-    primary: mat.$blue-palette,
-  ),
-));
-
-$dark-theme: mat.define-theme((
-  color: (
-    theme-type: dark,
-    primary: mat.$blue-palette,
-  ),
-));
-
-:root { @include mat.all-component-themes($light-theme); }
-.dark-theme { @include mat.all-component-themes($dark-theme); }
+:root,
+:root[data-theme='light'] { --bg: #f4f5f8; --surface: #ffffff; --text: #111827; /* … */ }
+:root[data-theme='dark']  { --bg: #0f1115; --surface: #171a21; /* … */ }
 ```
 
-Toggle via `document.body.classList.toggle('dark-theme')`, gespeichert in `localStorage`.
+- `ThemeService` setzt `data-theme` auf `<html>`. Startwert: gespeicherter Wert (`localStorage`-Key `dash-theme`),
+  sonst `prefers-color-scheme`.
+- Umschalten über den Sun/Moon-Button in der Topbar.
+- Komponenten verwenden ausschließlich Tokens, damit beide Themes ohne eigene Overrides funktionieren.
 
 ---
 
@@ -201,7 +203,7 @@ Toggle via `document.body.classList.toggle('dark-theme')`, gespeichert in `local
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  TOPBAR: Logo | Timer-Bar (persistent)      | Settings  │
+│  TOPBAR: Timer-Bar (persistent) | Suche | Theme-Toggle  │
 ├────────────┬────────────────────────────────────────────┤
 │  SIDEBAR   │  CONTENT                                   │
 │            │                                            │
@@ -219,41 +221,40 @@ Toggle via `document.body.classList.toggle('dark-theme')`, gespeichert in `local
 └────────────┴────────────────────────────────────────────┘
 ```
 
-- Sidebar: 240px fix, collapsible auf Icon-Only (56px) via Toggle.
-- Topbar: 56px Höhe, fix am oberen Rand.
-- Content: scrollbar, `overflow-y: auto`.
+- Sidebar: 220px mit Logo und Navigation (Lucide-Icon + Label).
+- Topbar: 64px Höhe, fix am oberen Rand.
+- Content: scrollbar, `overflow: auto`.
 
 ### Responsive
 
-- Desktop-first (>= 1024px): Vollständige Sidebar sichtbar.
-- Tablet (768–1023px): Sidebar collapsed (Icon-Only).
-- Mobile (<768px): Sidebar als Drawer (Overlay). Nicht Primärziel, aber nicht aktiv gebrochen.
+- Desktop-first (> 720px): vollständige Sidebar.
+- Schmal (641–720px): Sidebar nur mit Icons (64px).
+- Mobil (≤ 640px): keine Sidebar, Bottom-Navigation (56px) mit Icons und Kurzlabels. Die Timer-Bar
+  bricht in eine eigene Zeile um, Touch-Targets sind 44px groß.
 
 ---
 
-## Visualisierungen (ECharts)
+## Visualisierungen
 
-### Konfigurationsmuster
+Keine Chart-Library: Die Charts sind leichtgewichtige Standalone-Komponenten aus HTML/SVG
+in `shared/components/`. Sie haben Signal-Inputs und nutzen die Theme-Tokens.
 
-```typescript
-import { NgxEchartsModule } from 'ngx-echarts';
+| Komponente | Zweck |
+|---|---|
+| `app-bar-chart` | Horizontale Balken (Stunden/Umsatz pro Projekt, Kunde, …) |
+| `app-line-chart` | Trendlinie als SVG-Polyline |
+| `app-donut-gauge` | Billable-Quote als Ring |
 
-// In Component
-protected readonly chartOption = computed<EChartsOption>(() => ({
-  xAxis: { type: 'category', data: this.labels() },
-  yAxis: { type: 'value' },
-  series: [{ type: 'bar', data: this.values() }]
-}));
-```
+Eine Heatmap wird direkt im Reports-Template als CSS-Grid gerendert.
 
 ### Chart-Typen
 
 | Chart | Seite | Daten |
 |---|---|---|
 | Bar | Reports | Stunden pro Projekt/Kunde |
-| Donut | Reports | Billable vs Non-Billable |
-| Line | Dashboard/Reports | Trend täglich/wöchentlich |
-| Heatmap | Dashboard | Aktivitäts-Heatmap (Calendar Chart) |
+| Donut | Dashboard | Billable vs Non-Billable |
+| Line | Reports | Trend täglich/wöchentlich/monatlich |
+| Heatmap | Reports | Aktivität pro Tag |
 | Progress | Projektliste | Budgetverbrauch |
 
 ### Farbe in Charts

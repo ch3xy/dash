@@ -14,6 +14,7 @@ import { DateRangePickerComponent } from '../../shared/components/date-range-pic
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
 import { addDays, toIsoDate } from '../../shared/utils/date-utils';
+import { LucidePlus } from '@lucide/angular';
 
 interface Row {
   key: string;
@@ -56,7 +57,7 @@ export function parseDuration(input: string): number | null {
 @Component({
   selector: 'app-timesheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe, DateRangePickerComponent],
+  imports: [FormsModule, DurationPipe, DateRangePickerComponent, LucidePlus],
   template: `
     <div class="page">
       <div class="page-header">
@@ -138,7 +139,7 @@ export function parseDuration(input: string): number | null {
             <option [ngValue]="null">Ohne Task</option>
             @for (t of newTasks(); track t.id) { <option [ngValue]="t.id">{{ t.name }}</option> }
           </select>
-          <button class="btn btn-sm" (click)="addRow()" [disabled]="!newProjectId()">+ Zeile</button>
+          <button class="btn btn-sm" (click)="addRow()" [disabled]="!newProjectId()"><svg lucidePlus></svg> Zeile</button>
           <span class="muted">Zellen akzeptieren 1:30, 1,5 oder 90m. Enter speichert, leer löscht.</span>
         </div>
       }

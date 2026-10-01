@@ -34,6 +34,7 @@ import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DateRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
+import { LucideChevronLeft, LucideChevronRight } from '@lucide/angular';
 
 const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'];
 
@@ -45,7 +46,7 @@ type DetailRow =
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent, DateRangePickerComponent],
+  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent, DateRangePickerComponent, LucideChevronLeft, LucideChevronRight],
   template: `
     <div class="page">
       <div class="page-header"><h1>Reports</h1></div>
@@ -290,9 +291,9 @@ type DetailRow =
         @if (detailed(); as d) {
           @if (d.totalPages > 1) {
             <div class="card-pad row-between">
-              <button class="btn btn-sm" (click)="prevPage()" [disabled]="page() === 0">←</button>
+              <button class="btn btn-sm" (click)="prevPage()" [disabled]="page() === 0" aria-label="Vorherige Seite"><svg lucideChevronLeft></svg></button>
               <span class="muted">Seite {{ page() + 1 }} / {{ d.totalPages }}</span>
-              <button class="btn btn-sm" (click)="nextPage(d)" [disabled]="page() + 1 >= d.totalPages">→</button>
+              <button class="btn btn-sm" (click)="nextPage(d)" [disabled]="page() + 1 >= d.totalPages" aria-label="Nächste Seite"><svg lucideChevronRight></svg></button>
             </div>
           }
         }

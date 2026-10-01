@@ -11,11 +11,12 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { DateRange, RANGE_PRESETS, formatRange, matchPreset, parseIsoDate, weekRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate } from '../../shared/utils/date-utils';
+import { LucideArrowRight } from '@lucide/angular';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DecimalPipe, DurationPipe, MoneyPipe, DonutGaugeComponent, DateRangePickerComponent],
+  imports: [RouterLink, DecimalPipe, DurationPipe, MoneyPipe, DonutGaugeComponent, DateRangePickerComponent, LucideArrowRight],
   template: `
     <div class="page">
       <div class="page-header">
@@ -150,7 +151,7 @@ import { addDays, timeOf, toIsoDate } from '../../shared/utils/date-utils';
               </tbody>
             </table>
             <div class="card-pad" style="border-top: 1px solid var(--border); text-align: right;">
-              <a routerLink="/timer" class="btn btn-ghost btn-sm">Alle Einträge →</a>
+              <a routerLink="/timer" class="btn btn-ghost btn-sm">Alle Einträge <svg lucideArrowRight></svg></a>
             </div>
           </div>
         }

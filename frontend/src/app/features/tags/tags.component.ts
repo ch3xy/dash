@@ -4,11 +4,12 @@ import { TagApiService } from '../../core/api/tag-api.service';
 import { Tag, TagInput } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { LucidePlus } from '@lucide/angular';
 
 @Component({
   selector: 'app-tags',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, LucidePlus],
   template: `
     <div class="page">
       <div class="page-header">
@@ -22,7 +23,7 @@ import { ToastService } from '../../core/toast.service';
         <div class="row" style="margin-bottom: var(--sp-4)">
           <input class="input" [(ngModel)]="newName" placeholder="Tag-Name" (keydown.enter)="create()" />
           <input class="input" type="color" [(ngModel)]="newColor" style="width: 48px; padding: 2px;" />
-          <button class="btn btn-primary" (click)="create()" [disabled]="!newName.trim()">+ Tag</button>
+          <button class="btn btn-primary" (click)="create()" [disabled]="!newName.trim()"><svg lucidePlus></svg> Tag</button>
         </div>
 
         @if (loading()) {

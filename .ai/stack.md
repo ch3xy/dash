@@ -83,9 +83,10 @@ app:
 | Angular | 22 | Aktuell, Standalone Components stabil |
 | Node.js | 24 LTS | Stabile Entwicklung |
 | TypeScript | 6.x (gem. Angular) | |
-| UI-Bibliothek | Angular Material oder PrimeNG | Entscheidung vor Phase 0 |
-| Charts | Apache ECharts (ngx-echarts) | Flexibel, performant |
-| Table | Angular CDK Table oder TanStack | Reports |
+| UI-Bibliothek | keine – eigenes Design-System (`styles.scss`) | Schlank, volle Kontrolle über die CI |
+| Charts | eigene SVG/HTML-Komponenten (`shared/components`) | Keine Chart-Library nötig |
+| Icons | Lucide (`@lucide/angular` 1.x) | Standalone/Signal-basiert, zoneless, tree-shakable |
+| Table | native HTML-Tabellen (`.table`) | Reports, paginiert über das Backend |
 
 ### Frontend-Projektstruktur
 

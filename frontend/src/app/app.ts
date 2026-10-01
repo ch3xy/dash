@@ -1,5 +1,20 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  LucideCalendarDays,
+  LucideChartPie,
+  LucideDynamicIcon,
+  LucideFolderKanban,
+  LucideIcon,
+  LucideLayoutDashboard,
+  LucideMoon,
+  LucideSettings,
+  LucideSheet,
+  LucideSun,
+  LucideTag,
+  LucideTimer,
+  LucideUsers,
+} from '@lucide/angular';
 import { KeyboardShortcutService } from './core/keyboard-shortcut.service';
 import { ThemeService } from './core/theme.service';
 import { DialogHostComponent } from './core/layout/dialog-host.component';
@@ -10,7 +25,7 @@ import { ToastHostComponent } from './core/layout/toast-host.component';
 interface NavItem {
   path: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 @Component({
@@ -24,19 +39,23 @@ interface NavItem {
     GlobalSearchComponent,
     ToastHostComponent,
     DialogHostComponent,
+    LucideDynamicIcon,
+    LucideTimer,
+    LucideSun,
+    LucideMoon,
   ],
   template: `
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <span class="brand-mark">⏱</span>
+          <svg lucideTimer class="brand-mark" [size]="22" [strokeWidth]="2"></svg>
           <span class="brand-name">dash</span>
         </div>
         <nav class="sidebar-nav">
           @for (item of nav; track item.path) {
             <a [routerLink]="item.path" routerLinkActive="active"
                [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }">
-              <span class="nav-icon">{{ item.icon }}</span>
+              <svg class="nav-icon" [lucideIcon]="item.icon" [size]="18"></svg>
               <span>{{ item.label }}</span>
             </a>
           }
@@ -46,14 +65,14 @@ interface NavItem {
       <div class="main">
         <header class="topbar">
           <div class="topbar-brand">
-            <span class="brand-mark">⏱</span>
+            <svg lucideTimer class="brand-mark" [size]="22" [strokeWidth]="2"></svg>
             <span class="brand-name">dash</span>
           </div>
           <app-timer-bar class="topbar-timer" />
           <div class="topbar-actions">
             <app-global-search (click)="$event.stopPropagation()" />
-            <button class="btn btn-ghost btn-icon" (click)="theme.toggle()" title="Theme wechseln">
-              {{ theme.theme() === 'dark' ? '☀' : '☾' }}
+            <button class="btn btn-ghost btn-icon" (click)="theme.toggle()" title="Theme wechseln" aria-label="Theme wechseln">
+              @if (theme.theme() === 'dark') { <svg lucideSun [size]="18"></svg> } @else { <svg lucideMoon [size]="18"></svg> }
             </button>
           </div>
         </header>
@@ -67,7 +86,7 @@ interface NavItem {
         @for (item of nav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active"
              [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }">
-            <span class="nav-icon">{{ item.icon }}</span>
+            <svg class="nav-icon" [lucideIcon]="item.icon" [size]="18"></svg>
             <span class="bottom-nav-label">{{ item.label }}</span>
           </a>
         }
@@ -87,7 +106,7 @@ interface NavItem {
       padding: var(--sp-4) var(--sp-3);
     }
     .brand { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-5); font-weight: 700; font-size: var(--fs-xl); }
-    .brand-mark { font-size: 22px; }
+    .brand-mark { color: var(--brand); }
     .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
     .sidebar-nav a {
       display: flex; align-items: center; gap: var(--sp-3);
@@ -96,7 +115,7 @@ interface NavItem {
     }
     .sidebar-nav a:hover { background: var(--hover); color: var(--text); text-decoration: none; }
     .sidebar-nav a.active { background: var(--brand-soft); color: var(--brand); }
-    .nav-icon { width: 20px; text-align: center; }
+    .nav-icon { width: 20px; }
 
     /* ── Main area ── */
     .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -156,7 +175,6 @@ interface NavItem {
         color: var(--text-faint); font-size: 9px; gap: 2px;
         text-decoration: none; white-space: nowrap; transition: color 0.12s;
       }
-      .bottom-nav .nav-icon { font-size: 18px; line-height: 1; }
       .bottom-nav a.active { color: var(--brand); }
     }
   `],
@@ -164,15 +182,15 @@ interface NavItem {
 export class App {
   protected readonly theme = inject(ThemeService);
   protected readonly nav: NavItem[] = [
-    { path: '/dashboard', label: 'Dashboard', icon: '◧' },
-    { path: '/timer', label: 'Timer', icon: '⏱' },
-    { path: '/timesheet', label: 'Timesheet', icon: '▦' },
-    { path: '/calendar', label: 'Kalender', icon: '▤' },
-    { path: '/clients', label: 'Kunden', icon: '☺' },
-    { path: '/projects', label: 'Projekte', icon: '▣' },
-    { path: '/tags', label: 'Tags', icon: '⌗' },
-    { path: '/reports', label: 'Reports', icon: '◔' },
-    { path: '/settings', label: 'Einstellungen', icon: '⚙' },
+    { path: '/dashboard', label: 'Dashboard', icon: LucideLayoutDashboard },
+    { path: '/timer', label: 'Timer', icon: LucideTimer },
+    { path: '/timesheet', label: 'Timesheet', icon: LucideSheet },
+    { path: '/calendar', label: 'Kalender', icon: LucideCalendarDays },
+    { path: '/clients', label: 'Kunden', icon: LucideUsers },
+    { path: '/projects', label: 'Projekte', icon: LucideFolderKanban },
+    { path: '/tags', label: 'Tags', icon: LucideTag },
+    { path: '/reports', label: 'Reports', icon: LucideChartPie },
+    { path: '/settings', label: 'Einstellungen', icon: LucideSettings },
   ];
 
   private readonly shortcuts = inject(KeyboardShortcutService);

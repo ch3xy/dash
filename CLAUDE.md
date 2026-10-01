@@ -118,9 +118,10 @@ Da die Anwendung nur für eine Person ist, werden teambezogene Clockify-Features
 - Angular signals für lokalen UI-State
 - Angular Router
 - Reactive Forms
-- Angular Material oder PrimeNG als UI-Basis
-- ECharts, Apache Superset Embedded optional oder ngx-charts für Visualisierung
-- TanStack Table/Angular-kompatible Table-Lösung oder Angular CDK Table für Reports
+- Kein UI-Framework: eigenes Design-System (`frontend/src/styles.scss`, Tokens + Light/Dark)
+- Icons: Lucide (`@lucide/angular`)
+- Charts als eigene leichtgewichtige SVG/HTML-Komponenten (keine Chart-Library)
+- Native HTML-Tabellen für Reports
 
 ### Infrastruktur lokal
 

@@ -24,6 +24,7 @@ import {
   shiftRange,
   weekRange,
 } from '../utils/date-range';
+import { LucideCalendar, LucideChevronDown, LucideChevronLeft, LucideChevronRight } from '@lucide/angular';
 
 interface DayCell {
   iso: string;
@@ -52,10 +53,11 @@ const WEEKDAY_HEADERS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 @Component({
   selector: 'app-date-range-picker',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [LucideCalendar, LucideChevronDown, LucideChevronLeft, LucideChevronRight],
   template: `
     <div class="drp" [class.drp-end]="align() === 'end'" [class.drp-md]="size() === 'md'">
       <button type="button" class="btn btn-sm drp-step" (click)="step(-1)" [attr.aria-label]="'Vorheriger Zeitraum'">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>
+        <svg lucideChevronLeft></svg>
       </button>
       <button
         #trigger
@@ -65,15 +67,13 @@ const WEEKDAY_HEADERS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
         [attr.aria-expanded]="open()"
         [attr.aria-label]="ariaLabel() + ': ' + primaryLabel() + (secondaryLabel() ? ', ' + secondaryLabel() : '')"
         (click)="toggle()">
-        <svg class="drp-icon" viewBox="0 0 16 16" aria-hidden="true">
-          <rect x="2" y="3" width="12" height="11" rx="2" /><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
-        </svg>
+        <svg lucideCalendar class="drp-icon"></svg>
         <span class="drp-primary">{{ primaryLabel() }}</span>
         @if (secondaryLabel()) { <span class="drp-secondary mono">{{ secondaryLabel() }}</span> }
-        <svg class="drp-caret" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+        <svg lucideChevronDown class="drp-caret"></svg>
       </button>
       <button type="button" class="btn btn-sm drp-step" (click)="step(1)" [attr.aria-label]="'Nächster Zeitraum'">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+        <svg lucideChevronRight></svg>
       </button>
 
       @if (open()) {
@@ -92,11 +92,11 @@ const WEEKDAY_HEADERS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
           <div class="drp-cal">
             <div class="drp-cal-head">
               <button type="button" class="btn btn-ghost btn-sm drp-month-nav" (click)="moveMonth(-1)" aria-label="Vorheriger Monat">
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>
+                <svg lucideChevronLeft></svg>
               </button>
               <span class="drp-month" aria-live="polite">{{ monthLabel() }}</span>
               <button type="button" class="btn btn-ghost btn-sm drp-month-nav" (click)="moveMonth(1)" aria-label="Nächster Monat">
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" /></svg>
+                <svg lucideChevronRight></svg>
               </button>
             </div>
 
@@ -146,7 +146,6 @@ const WEEKDAY_HEADERS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   styles: [`
     :host { display: inline-block; }
     .drp { position: relative; display: inline-flex; align-items: center; gap: var(--sp-1); }
-    svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
     .drp-step { width: 30px; padding: 0; }
     .drp-trigger { min-width: 210px; justify-content: flex-start; gap: var(--sp-2); }
     .drp-md .drp-trigger, .drp-md .drp-step { height: 38px; }

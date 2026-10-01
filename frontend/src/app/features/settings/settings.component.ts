@@ -5,11 +5,12 @@ import { SettingsApiService } from '../../core/api/settings-api.service';
 import { AppSettings, RoundingRule } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { LucideDownload } from '@lucide/angular';
 
 @Component({
   selector: 'app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, LucideDownload],
   template: `
     <div class="page" style="max-width: 720px;">
       <div class="page-header"><h1>Einstellungen</h1></div>
@@ -45,7 +46,7 @@ import { ToastService } from '../../core/toast.service';
       <div class="card card-pad mt-4">
         <div class="card-title">Datensicherung</div>
         <p class="muted">Vollständiges JSON-Backup aller Daten herunterladen.</p>
-        <button class="btn" (click)="downloadBackup()" [disabled]="busy()">⬇ Backup exportieren</button>
+        <button class="btn" (click)="downloadBackup()" [disabled]="busy()"><svg lucideDownload></svg> Backup exportieren</button>
       </div>
 
       <div class="card card-pad mt-4">

@@ -199,6 +199,14 @@ a:hover {
   font-size: var(--fs-sm);
   padding: 0 var(--sp-3);
 }
+svg.lucide {
+  flex-shrink: 0;
+}
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
 .btn-icon {
   width: 38px;
   padding: 0;

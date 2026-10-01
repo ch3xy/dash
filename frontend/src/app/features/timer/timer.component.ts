@@ -14,6 +14,7 @@ import { AutofocusDirective } from '../../shared/directives/autofocus.directive'
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils/date-utils';
+import { LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucidePlus, LucideSplit, LucideX } from '@lucide/angular';
 
 interface EntryGroup {
   key: string;
@@ -31,20 +32,20 @@ interface EntryGroup {
 @Component({
   selector: 'app-timer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe, MoneyPipe, AutofocusDirective],
+  imports: [FormsModule, DurationPipe, MoneyPipe, AutofocusDirective, LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucidePlus, LucideSplit, LucideX],
   template: `
     <div class="page">
       <div class="page-header">
         <h1>Timer</h1>
         <div class="row gap-2">
-          <button class="btn btn-sm" (click)="shiftDay(-1)">←</button>
+          <button class="btn btn-sm" (click)="shiftDay(-1)" aria-label="Vorheriger Tag"><svg lucideChevronLeft></svg></button>
           <span class="mono" style="min-width: 100px; text-align: center;">
             {{ viewDateLabel() }}
           </span>
-          <button class="btn btn-sm" (click)="shiftDay(1)" [disabled]="viewDate() === todayIso">→</button>
+          <button class="btn btn-sm" (click)="shiftDay(1)" [disabled]="viewDate() === todayIso" aria-label="Nächster Tag"><svg lucideChevronRight></svg></button>
           <button class="btn btn-sm" (click)="goToday()" [disabled]="viewDate() === todayIso">Heute</button>
         </div>
-        <button class="btn btn-primary" (click)="openNew()">+ Eintrag</button>
+        <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Eintrag</button>
       </div>
 
       <div class="card card-pad row-between">
@@ -64,7 +65,7 @@ interface EntryGroup {
           @for (c of recent(); track c.projectId + (c.taskId ?? '')) {
             <button class="btn btn-sm" (click)="startFromCombo(c)" [disabled]="timerState.isRunning()"
                     title="Timer mit dieser Kombination starten">
-              ▶ {{ c.projectName }}@if (c.taskName) { <span class="faint"> · {{ c.taskName }}</span> }
+              <svg lucidePlay></svg> {{ c.projectName }}@if (c.taskName) { <span class="faint"> · {{ c.taskName }}</span> }
             </button>
           }
         </div>
@@ -116,7 +117,7 @@ interface EntryGroup {
                       <button class="btn btn-ghost btn-icon btn-sm"
                               (click)="toggleGroup(g.key)"
                               title="{{ expandedGroups().has(g.key) ? 'Einklappen' : 'Aufklappen' }}">
-                        {{ expandedGroups().has(g.key) ? '▾' : '▸' }}
+                        @if (expandedGroups().has(g.key)) { <svg lucideChevronDown></svg> } @else { <svg lucideChevronRight></svg> }
                       </button>
                     }
                   </td>
@@ -157,10 +158,10 @@ interface EntryGroup {
                   <td class="num mono">{{ g.totalSeconds | duration: 'HH:MM' }}</td>
                   <td class="text-right" style="white-space: nowrap;">
                     @if (g.entries.length === 1) {
-                      <button class="btn btn-ghost btn-sm" (click)="continueEntry(g.entries[0])" title="Fortsetzen">▶</button>
-                      <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren">⎘</button>
-                      <button class="btn btn-ghost btn-sm" (click)="openSplit(g.entries[0])" title="Aufteilen">⚡</button>
-                      <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten">✎</button>
+                      <button class="btn btn-ghost btn-sm" (click)="continueEntry(g.entries[0])" title="Fortsetzen" aria-label="Fortsetzen"><svg lucidePlay></svg></button>
+                      <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
+                      <button class="btn btn-ghost btn-sm" (click)="openSplit(g.entries[0])" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
+                      <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
                       <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen">🗑</button>
                     } @else {
                       <button class="btn btn-ghost btn-sm" (click)="toggleGroup(g.key)"
@@ -190,10 +191,10 @@ interface EntryGroup {
                         {{ e.durationSeconds | duration: 'HH:MM' }}
                       </td>
                       <td class="text-right" style="white-space: nowrap;">
-                        <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen">▶</button>
-                        <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren">⎘</button>
-                        <button class="btn btn-ghost btn-sm" (click)="openSplit(e)" title="Aufteilen">⚡</button>
-                        <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten">✎</button>
+                        <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen" aria-label="Fortsetzen"><svg lucidePlay></svg></button>
+                        <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
+                        <button class="btn btn-ghost btn-sm" (click)="openSplit(e)" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
+                        <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
                         <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
                       </td>
                     </tr>
@@ -211,7 +212,7 @@ interface EntryGroup {
         <div class="dialog" (click)="$event.stopPropagation()" style="max-width: 360px;">
           <div class="dialog-header">
             <h3>Eintrag aufteilen</h3>
-            <button class="btn btn-ghost btn-icon" (click)="closeSplit()">✕</button>
+            <button class="btn btn-ghost btn-icon" (click)="closeSplit()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
             <div class="faint" style="font-size: var(--fs-sm);">
@@ -236,7 +237,7 @@ interface EntryGroup {
         <div class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h3>{{ editingId ? 'Eintrag bearbeiten' : 'Manueller Eintrag' }}</h3>
-            <button class="btn btn-ghost btn-icon" (click)="close()">✕</button>
+            <button class="btn btn-ghost btn-icon" (click)="close()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
             <div class="field"><label>Beschreibung</label><input class="input" [(ngModel)]="form.description" /></div>

@@ -4,18 +4,19 @@ import { ClientApiService } from '../../core/api/client-api.service';
 import { Client, ClientInput } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { LucidePlus, LucideX } from '@lucide/angular';
 
 @Component({
   selector: 'app-clients',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, LucidePlus, LucideX],
   template: `
     <div class="page">
       <div class="page-header">
         <h1>Kunden</h1>
         <div class="row">
           <label class="switch"><input type="checkbox" [(ngModel)]="showArchived" (ngModelChange)="load()" /> Archivierte</label>
-          <button class="btn btn-primary" (click)="openNew()">+ Kunde</button>
+          <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Kunde</button>
         </div>
       </div>
 
@@ -62,7 +63,7 @@ import { ToastService } from '../../core/toast.service';
         <div class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h3>{{ e.id ? 'Kunde bearbeiten' : 'Neuer Kunde' }}</h3>
-            <button class="btn btn-ghost btn-icon" (click)="close()">✕</button>
+            <button class="btn btn-ghost btn-icon" (click)="close()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
             <div class="field">

@@ -7,13 +7,14 @@ import { Client, Project, ProjectInput, ProjectStatus } from '../../core/models'
 import { ToastService } from '../../core/toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
+import { LucidePlus, LucideX } from '@lucide/angular';
 
 const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
 
 @Component({
   selector: 'app-projects',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DurationPipe, MoneyPipe],
+  imports: [FormsModule, RouterLink, DurationPipe, MoneyPipe, LucidePlus, LucideX],
   template: `
     <div class="page">
       <div class="page-header">
@@ -23,7 +24,7 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
             <option [ngValue]="undefined">Alle Status</option>
             @for (s of statuses; track s) { <option [ngValue]="s">{{ s }}</option> }
           </select>
-          <button class="btn btn-primary" (click)="openNew()">+ Projekt</button>
+          <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Projekt</button>
         </div>
       </div>
 
@@ -64,7 +65,7 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
         <div class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
             <h3>{{ editingId ? 'Projekt bearbeiten' : 'Neues Projekt' }}</h3>
-            <button class="btn btn-ghost btn-icon" (click)="close()">✕</button>
+            <button class="btn btn-ghost btn-icon" (click)="close()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
             <div class="field"><label>Name *</label><input class="input" [(ngModel)]="form.name" /></div>
