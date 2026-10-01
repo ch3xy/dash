@@ -239,7 +239,7 @@ Die Shell folgt dem gemeinsamen Arrow-Layout (Referenz: velo), siehe
 
 - Sidebar (`app.ts`): 240px, einklappbar auf 72px (Zustand in `localStorage` `dash-nav-collapsed`).
   Logo aus `public/logo-sidebar(-dark).svg` bzw. `sidebar-min(-dark).svg`, Nav-Items 48px mit 20px-Icons,
-  aktiv mit `--brand-soft`/`--brand`. Einstellungen im Footer, darunter die Version aus `GET /health`.
+  aktiv mit `--brand-soft`/`--brand`. Einstellungen im Footer direkt unter der Navigation (gedämpft), die Version aus `GET /health` ganz unten.
 - Topbar: 64px Höhe, fix am oberen Rand.
 - Content: scrollbar, `overflow: auto`.
 

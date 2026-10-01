@@ -183,9 +183,9 @@ Alle Produkte teilen dieselbe Shell: **Sidebar links, Topbar oben (produktspezif
 │ ERFASSUNG    │                                               │
 │ ⏱ Timer      │                                               │
 │ …            │                                               │
-│              │                                               │
 ├──────────────┤                                               │
 │ ⚙ Einstell.  │                                               │
+│              │                                               │
 │ v1.2.3       │                                               │
 └──────────────┴───────────────────────────────────────────────┘
 ```
@@ -202,8 +202,8 @@ Alle Produkte teilen dieselbe Shell: **Sidebar links, Topbar oben (produktspezif
 | Nav-Item Farben | Icon muted, Text normal; Hover Surface 2; **aktiv: Primary-Light-Bg, Text + Icon Primary, 600** |
 | Liste | Gruppen mit 8px seitlichem Padding |
 | Eingeklappt | Labels und Gruppenlabels ausgeblendet, Items zentriert, Tooltip (`title`) + `aria-label` mit dem Namen |
-| Footer | border-top, Padding 8px, Eintrag **Einstellungen** (gleiche Geometrie wie Nav-Items) |
-| Versionszeile | `v{version}` unter dem Footer, 11px, Hint-Farbe, opacity .55, nur ausgeklappt |
+| Footer | **direkt unter der Navigation** (nicht am unteren Rand), border-top, Padding 8px. Eintrag **Einstellungen** in Nav-Item-Geometrie, aber gedämpft: Text + Icon muted, Schrift 400, Hover Surface 2 + Text-Farbe. Eingeklappt: runder 40px-Icon-Button, zentriert |
+| Versionszeile | `v{version}`, per `margin-top: auto` **ganz unten** in der Sidebar, 11px, Hint-Farbe, opacity .55, nur ausgeklappt |
 | Zustand | Einklappen wird pro Produkt in `localStorage` gespeichert (`<produkt>-nav-collapsed`) |
 
 ### Gruppierung der Navigation

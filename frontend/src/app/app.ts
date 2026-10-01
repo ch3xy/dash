@@ -104,7 +104,7 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
         </nav>
 
         <div class="nav-footer">
-          <a class="nav-item" routerLink="/settings" routerLinkActive="active"
+          <a class="nav-item nav-settings" routerLink="/settings" routerLinkActive="active"
              [attr.aria-label]="collapsed() ? 'Einstellungen' : null"
              [title]="collapsed() ? 'Einstellungen' : ''" (click)="closeDrawer()">
             <span class="nav-icon"><svg lucideSettings [size]="20"></svg></span>
@@ -173,7 +173,8 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
     }
     .icon-btn:hover { background: var(--hover); color: var(--text); }
 
-    .nav-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+    /* Not flex: 1 — the footer sits directly below the list, only the version bar goes to the bottom */
+    .nav-body { min-height: 0; overflow-y: auto; overflow-x: hidden; }
     .nav-group { margin-bottom: var(--sp-1); padding: 0 var(--sp-2); }
     .nav-group-label {
       font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
@@ -197,9 +198,13 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
     .nav-item.active .nav-icon { color: var(--brand); }
 
     .nav-footer { flex-shrink: 0; border-top: 1px solid var(--border); padding: var(--sp-2); }
+    /* Settings is a secondary entry: muted, regular weight (velo .nav-settings) */
+    .nav-settings { color: var(--text-muted); font-weight: 400; }
+    .nav-settings .nav-icon { color: inherit; }
+    .nav-settings:hover { color: var(--text); }
 
     .nav-version {
-      flex-shrink: 0;
+      margin-top: auto; flex-shrink: 0;
       padding: var(--sp-2) var(--sp-4) var(--sp-3) calc(var(--sp-2) + var(--sp-4));
       font-size: 11px; letter-spacing: 0.03em;
       color: var(--text-faint); opacity: 0.55;
@@ -219,7 +224,9 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
     .sidenav.collapsed .nav-group { padding: 0 var(--sp-1); }
     .sidenav.collapsed .nav-group + .nav-group { border-top: 1px solid var(--border); padding-top: var(--sp-1); margin-top: var(--sp-1); }
     .sidenav.collapsed .nav-item { justify-content: center; padding: 0; }
-    .sidenav.collapsed .nav-footer { padding: var(--sp-2) var(--sp-1); }
+    .sidenav.collapsed .nav-footer { display: flex; flex-direction: column; align-items: center; padding: var(--sp-2) 0; }
+    /* collapsed: round 40px icon button like velo's settings-icon-btn */
+    .sidenav.collapsed .nav-settings { width: 40px; min-height: 40px; margin: 0; border-radius: 50%; }
 
     /* ── Main area ── */
     .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -256,7 +263,8 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
       .sidenav.collapsed .nav-group { padding: 0 var(--sp-2); }
       .sidenav.collapsed .nav-group + .nav-group { border-top: none; padding-top: 0; margin-top: 0; }
       .sidenav.collapsed .nav-item { justify-content: flex-start; padding: 0 var(--sp-4); }
-      .sidenav.collapsed .nav-footer { padding: var(--sp-2); }
+      .sidenav.collapsed .nav-footer { display: block; padding: var(--sp-2); }
+      .sidenav.collapsed .nav-settings { width: auto; min-height: 48px; margin: 1px 0; border-radius: var(--radius); }
       .collapse-btn { display: none; }
 
       .drawer-backdrop {
