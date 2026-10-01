@@ -29,6 +29,7 @@ Alle maschinenlesbaren Implementierungsdetails befinden sich im `.ai/`-Verzeichn
 | [.ai/modules/settings.md](.ai/modules/settings.md) | AppSettings-Modul |
 | [.ai/frontend/architecture.md](.ai/frontend/architecture.md) | Angular-Struktur, Routing, State |
 | [.ai/frontend/design-system.md](.ai/frontend/design-system.md) | Design-System, Komponenten, Charts |
+| [docs/arrow-corporate-design.md](docs/arrow-corporate-design.md) | Corporate Design aller Arrow-Produkte (Logo, Farben, App-Shell) |
 
 **Für autonome Implementierung:** Starte mit [.ai/phases.md](.ai/phases.md) und [.ai/tickets.md](.ai/tickets.md). Modul-Details in `modules/`, Business-Regeln in `rules/`.
 

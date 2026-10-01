@@ -39,6 +39,7 @@ Dieses Verzeichnis enthält alle maschinenlesbaren Implementierungsdetails für 
 |---|---|
 | [frontend/architecture.md](frontend/architecture.md) | Angular-Projektstruktur, State, Routing |
 | [frontend/design-system.md](frontend/design-system.md) | Design-System, Farben, Spacing, Komponenten |
+| [../docs/arrow-corporate-design.md](../docs/arrow-corporate-design.md) | Corporate Design der Arrow-Produkte (velo, dash, mission control) |
 
 ## Verwendung
 

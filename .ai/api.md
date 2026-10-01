@@ -20,6 +20,21 @@ Fehlerformat: RFC 7807 `ProblemDetail`
 
 ---
 
+## Health
+
+```http
+GET /health
+```
+
+```json
+{ "status": "UP", "version": "0.0.1-SNAPSHOT", "timestamp": "2026-10-01T12:00:00Z" }
+```
+
+`version` stammt aus der Maven-Build-Info (`META-INF/build-info.properties`), ohne Build-Info `dev`.
+Das Frontend zeigt sie in der Versionszeile der Sidebar.
+
+---
+
 ## Clients
 
 ### `GET /clients`

@@ -15,7 +15,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 - [x] Docker Compose mit PostgreSQL 17
 - [x] Flyway V1–V4 (vollständiges Schema, Indexe, Constraints, Settings-Defaults)
 - [x] RFC 7807 `ProblemDetail`-GlobalExceptionHandler (`@RestControllerAdvice`)
-- [x] `GET /api/v1/health` → `{ "status": "UP", "timestamp": "..." }`
+- [x] `GET /api/v1/health` → `{ "status": "UP", "version": "...", "timestamp": "..." }`
 - [x] CORS für `http://localhost:4200`
 - [x] Testcontainers Integration-Test für Context-Load
 

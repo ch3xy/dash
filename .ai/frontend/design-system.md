@@ -11,6 +11,8 @@
   z. B. `app-date-range-picker`, Charts, Dialog- und Toast-Host.
 - Icons: Lucide (`@lucide/angular`), siehe Abschnitt „Icons (Lucide)“.
 - Neue Styles nutzen immer die Tokens (`--sp-*`, `--radius*`, `--fs-*`, Farben), keine Hardcode-Werte.
+- Produktübergreifendes Corporate Design (Logo, Farben, Typografie, App-Shell) der Arrow-Produkte:
+  [docs/arrow-corporate-design.md](../../docs/arrow-corporate-design.md). Bei Widersprüchen gilt der Leitfaden.
 
 ---
 
@@ -30,14 +32,24 @@
 
 ## Farben
 
+Palette nach dem Arrow-Leitfaden: Indigo als Primary, Slate als Neutralfarben
+(Werte siehe [docs/arrow-corporate-design.md](../../docs/arrow-corporate-design.md) Abschnitt 3).
+
+| Token | Verwendung |
+|---|---|
+| `--brand`, `--brand-hover`, `--brand-soft` | Primary (hell Indigo 600, dunkel Indigo 500), Auswahl/aktive Navigation |
+| `--bg`, `--surface`, `--surface-2`, `--border`, `--hover` | Seitenhintergrund, Karten/Sidebar, Tabellenkopf/Inputs, Linien, Hover |
+| `--text`, `--text-muted`, `--text-faint` | Text, Sekundärtext, Hinweise/Gruppenlabels |
+| `--ok`/`--ok-bg`, `--warn`/`--warn-bg`, `--danger`/`--danger-bg`, `--info`/`--info-bg` | Semantik: Text-/Linienfarbe und passender Hintergrund (Badges) |
+
 ### Status-Farben (Projektbudget)
 
-| Status | Farbe | Hex (Light) |
+| Status | Token | Hex (Light / Dark) |
 |---|---|---|
-| `ON_TRACK` | Grün | `#22c55e` |
-| `WARNING` (>80%) | Gelb/Orange | `#f59e0b` |
-| `EXCEEDED` (>100%) | Rot | `#ef4444` |
-| Archiviert/Inaktiv | Grau | `#9ca3af` |
+| `ON_TRACK` | `--ok` | `#059669` / `#34d399` |
+| `WARNING` (>80%) | `--warn` | `#d97706` / `#fcd34d` |
+| `EXCEEDED` (>100%) | `--danger` | `#dc2626` / `#f87171` |
+| Archiviert/Inaktiv | `--text-faint` | Slate, 38 % Deckkraft |
 
 ### Projekt-Farben (farbcodiert)
 
@@ -64,7 +76,8 @@ export const PROJECT_COLORS = [
 
 ## Typografie
 
-- Font: System-Font-Stack (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`)
+- Font: **Inter**, selbst gehostet über `@fontsource-variable/inter` (Import in `styles.scss`, kein CDN),
+  Fallback System-Font-Stack (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`)
 - Body: 14px / 1.5 line-height
 - Labels: 12px, uppercase, letter-spacing 0.05em
 - Headings: 20px (h1), 16px (h2), 14px (h3)
@@ -118,10 +131,10 @@ export const PROJECT_COLORS = [
   font-weight: 600;
   text-transform: uppercase;
 
-  &--active    { background: #dcfce7; color: #166534; }
-  &--paused    { background: #fef3c7; color: #92400e; }
-  &--completed { background: #dbeafe; color: #1e40af; }
-  &--archived  { background: #f3f4f6; color: #6b7280; }
+  &--active    { background: var(--ok-bg);     color: var(--ok); }
+  &--paused    { background: var(--warn-bg);   color: var(--warn); }
+  &--completed { background: var(--info-bg);   color: var(--info); }
+  &--archived  { background: var(--surface-2); color: var(--text-faint); }
 }
 ```
 
@@ -171,7 +184,7 @@ Eingesetzt in Dashboard, Reports, Timesheet und Kalender.
   (Import `LucidePlay` in `imports` der Komponente). Dynamisch (z. B. Navigation): `<svg [lucideIcon]="item.icon"></svg>`
   mit `LucideDynamicIcon` und Typ `LucideIcon`.
 - Defaults global in `app.config.ts`: `provideLucideConfig({ size: 16, strokeWidth: 1.75 })`.
-  Navigation und Topbar-Aktionen nutzen `[size]="18"`, das Brand-Icon `22`.
+  Sidebar-Navigation nutzt `[size]="20"`, Topbar-Aktionen `[size]="18"`.
 - Farbe kommt über `currentColor` aus dem Text des Elternelements, also keine Farben am Icon selbst setzen.
 - Icons ohne `title` sind automatisch `aria-hidden`. Reine Icon-Buttons brauchen deshalb immer ein `aria-label`
   (zusätzlich `title` für den Tooltip).
@@ -186,8 +199,8 @@ Umsetzung über CSS-Custom-Properties in `styles.scss`:
 
 ```scss
 :root,
-:root[data-theme='light'] { --bg: #f4f5f8; --surface: #ffffff; --text: #111827; /* … */ }
-:root[data-theme='dark']  { --bg: #0f1115; --surface: #171a21; /* … */ }
+:root[data-theme='light'] { --bg: #f8fafc; --surface: #ffffff; --text: #0f172a; /* … */ }
+:root[data-theme='dark']  { --bg: #1e293b; --surface: #0f172a; /* … */ }
 ```
 
 - `ThemeService` setzt `data-theme` auf `<html>`. Startwert: gespeicherter Wert (`localStorage`-Key `dash-theme`),
@@ -201,36 +214,41 @@ Umsetzung über CSS-Custom-Properties in `styles.scss`:
 
 ### App Shell
 
+Die Shell folgt dem gemeinsamen Arrow-Layout (Referenz: velo), siehe
+[docs/arrow-corporate-design.md](../../docs/arrow-corporate-design.md) Abschnitt 7.
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│  TOPBAR: Timer-Bar (persistent) | Suche | Theme-Toggle  │
-├────────────┬────────────────────────────────────────────┤
-│  SIDEBAR   │  CONTENT                                   │
-│            │                                            │
-│  Dashboard │                                            │
-│  Timer     │                                            │
-│  Timesheet │                                            │
-│  Calendar  │                                            │
-│  ───────   │                                            │
-│  Clients   │                                            │
-│  Projects  │                                            │
-│  Tags      │                                            │
-│  ───────   │                                            │
-│  Reports   │                                            │
-│  Settings  │                                            │
-└────────────┴────────────────────────────────────────────┘
+┌──────────────┬───────────────────────────────────────────────┐
+│ [dash-Logo] ‹│  TOPBAR: Timer-Bar | Suche | Theme-Toggle     │
+│ ÜBERSICHT    ├───────────────────────────────────────────────┤
+│  Dashboard   │  CONTENT                                      │
+│  Reports     │                                               │
+│ ERFASSUNG    │                                               │
+│  Timer       │                                               │
+│  Timesheet   │                                               │
+│  Kalender    │                                               │
+│ STAMMDATEN   │                                               │
+│  Kunden      │                                               │
+│  Projekte    │                                               │
+│  Tags        │                                               │
+├──────────────┤                                               │
+│  Einstell.   │                                               │
+│  v0.0.1      │                                               │
+└──────────────┴───────────────────────────────────────────────┘
 ```
 
-- Sidebar: 220px mit Logo und Navigation (Lucide-Icon + Label).
+- Sidebar (`app.ts`): 240px, einklappbar auf 72px (Zustand in `localStorage` `dash-nav-collapsed`).
+  Logo aus `public/logo-sidebar(-dark).svg` bzw. `sidebar-min(-dark).svg`, Nav-Items 48px mit 20px-Icons,
+  aktiv mit `--brand-soft`/`--brand`. Einstellungen im Footer, darunter die Version aus `GET /health`.
 - Topbar: 64px Höhe, fix am oberen Rand.
 - Content: scrollbar, `overflow: auto`.
 
 ### Responsive
 
-- Desktop-first (> 720px): vollständige Sidebar.
-- Schmal (641–720px): Sidebar nur mit Icons (64px).
-- Mobil (≤ 640px): keine Sidebar, Bottom-Navigation (56px) mit Icons und Kurzlabels. Die Timer-Bar
-  bricht in eine eigene Zeile um, Touch-Targets sind 44px groß.
+- Desktop (> 640px): Sidebar sichtbar, ein-/ausklappbar.
+- Mobil (≤ 640px): Sidebar als Off-Canvas-Drawer mit Backdrop, geöffnet über den Menü-Button in der Topbar;
+  schließt bei Navigation, Backdrop-Klick und `Escape`. Die Timer-Bar bricht in eine eigene Zeile um,
+  Touch-Targets sind 44px groß.
 
 ---
 

@@ -86,6 +86,7 @@ app:
 | UI-Bibliothek | keine – eigenes Design-System (`styles.scss`) | Schlank, volle Kontrolle über die CI |
 | Charts | eigene SVG/HTML-Komponenten (`shared/components`) | Keine Chart-Library nötig |
 | Icons | Lucide (`@lucide/angular` 1.x) | Standalone/Signal-basiert, zoneless, tree-shakable |
+| Schrift | Inter (`@fontsource-variable/inter` 5.x) | Selbst gehostet (DSGVO, offline), Arrow-Corporate-Design |
 | Table | native HTML-Tabellen (`.table`) | Reports, paginiert über das Backend |
 
 ### Frontend-Projektstruktur
