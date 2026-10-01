@@ -10,7 +10,7 @@ export type BudgetReset = 'NONE' | 'MONTHLY' | 'YEARLY';
 export type TimeEntrySource = 'TIMER' | 'MANUAL' | 'IMPORT' | 'ADJUSTMENT';
 export type BudgetStatusKind = 'ON_TRACK' | 'WARNING' | 'EXCEEDED';
 export type Granularity = 'DAY' | 'WEEK' | 'MONTH';
-export type GroupBy = 'DAY' | 'WEEK' | 'MONTH' | 'CLIENT' | 'PROJECT' | 'TASK';
+export type GroupBy = 'DAY' | 'WEEK' | 'MONTH' | 'CLIENT' | 'PROJECT' | 'TASK' | 'TAG';
 export type RoundingRule = 'NONE' | 'UP' | 'DOWN' | 'NEAREST';
 
 export interface Client {

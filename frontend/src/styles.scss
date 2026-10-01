@@ -369,6 +369,7 @@ a:hover {
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
 .wrap { flex-wrap: wrap; }
 .gap-2 { gap: var(--sp-2); }
+.mt-2 { margin-top: var(--sp-2); }
 .mt-4 { margin-top: var(--sp-4); }
 .flex-1 { flex: 1; }
 .stat-value { font-size: var(--fs-2xl); font-weight: 700; font-variant-numeric: tabular-nums; }

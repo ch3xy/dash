@@ -21,7 +21,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ### Frontend
 
-- [ ] Angular 22 Projekt — ausstehend (Backend-First-Strategie)
+- [x] Angular 22 Projekt, App-Shell, Routing, Theme — umgesetzt 2026-06-19 (siehe Abschnitt „Frontend — Angular 22“)
 
 ### Akzeptanzkriterien
 
@@ -49,7 +49,8 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ### Frontend
 
-- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie, gesammelt nach Backend-Phasen)
+- [x] Kunden, Projekte (Liste + Detail mit Tasks, Ratenhistorie, Budget), Tags — umgesetzt 2026-06-19
+- [x] Task-Bearbeitung: Rate-Override, Billable-Default, Schätzung vs. erfasste Zeit — 2026-10-01
 
 ### Akzeptanzkriterien
 
@@ -85,7 +86,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ### Frontend
 
-- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
+- [x] Timer-Bar, Heute-Liste, manueller Eintrag, Continue/Edit/Delete, Tags, Billable — umgesetzt 2026-06-19
 
 ### Akzeptanzkriterien
 
@@ -117,7 +118,9 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ### Frontend
 
-- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
+- [x] Timesheet (Wochenraster) und Kalender (Wochenansicht) — umgesetzt 2026-06-19
+- [x] Timesheet: Zeilen je Projekt + Task, direkte Zelleingabe, „Vorwoche kopieren“ — 2026-10-01
+      (`PUT /timesheet/cell`, `POST /timesheet/copy-week`)
 
 ### Akzeptanzkriterien
 
@@ -147,11 +150,13 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 - [x] `GET /reports/export.csv` (Apache Commons CSV)
 - [x] Filter: Zeitraum, Kunde, Projekt, Task, Tag, Billable, Volltext
 - [x] Gruppierung: Tag/Woche/Monat/Kunde/Projekt/Task (whitelisted via `GroupBy`-Enum)
+- [x] Gruppierung nach Tag-Label (`GroupBy.TAG`, Totals separat ohne Doppelzählung) — 2026-10-01
 - [x] `ReportQueryRepository` mit nativen SQL-Aggregationen (NamedParameterJdbcTemplate)
 
 ### Frontend
 
-- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
+- [x] Reports-Seite: Filterbar (URL-synchronisiert), Summary-Cards, Charts, Detailtabelle, CSV-Export — umgesetzt 2026-06-19
+- [x] Filter Task/Tag/Beschreibung und Gruppierung nach Tag (Label) — 2026-10-01
 
 ### Akzeptanzkriterien
 
@@ -187,7 +192,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ### Frontend
 
-- [ ] Angular-Seiten — ausstehend (Backend-First-Strategie)
+- [x] Heatmap, XLSX-Export, Rounded/Raw-Umschalter, Dashboard — umgesetzt 2026-06-19
 
 ### Akzeptanzkriterien
 
@@ -206,7 +211,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 ---
 
-## Phase 6 — Polishing & Produktivität ✅ 2026-06-19 (Backend)
+## Phase 6 — Polishing & Produktivität ✅ 2026-06-19
 
 **Ziel:** Reibungsloser täglicher Workflow.
 
@@ -269,7 +274,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 ### Kern
 
 - [x] App-Shell: Sidebar-Navigation, Topbar mit Live-Timer-Bar, Theme-Toggle
-- [x] 9 typisierte API-Services + DTO-Modelle (`core/`)
+- [x] Typisierte API-Services + DTO-Modelle (`core/`)
 - [x] `TimerStateService` (Polling + lokaler 1s-Tick), `ThemeService`, `ToastService`
 - [x] Pipes: `duration`, `money`; Date-Utils
 
@@ -277,7 +282,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 - [x] Dashboard (Perioden-Stats, laufender Timer, Budget-Alerts, Top-Projekte/-Kunden)
 - [x] Timer (Heute-Liste, manueller Eintrag, Continue/Edit/Delete, Tags, Billable)
-- [x] Timesheet (Wochenraster, Navigation, Quick-Add je Tageszelle)
+- [x] Timesheet (Wochenraster, Navigation, direkte Zelleingabe, Vorwoche kopieren)
 - [x] Kalender (Wochenansicht, positionierte Einträge auf Stundenraster)
 - [x] Kunden (CRUD, Archiv, Delete mit 409-Handling)
 - [x] Projekte (Liste + Detail: Budget-Status, Tasks, Ratenhistorie, Status)
@@ -296,7 +301,7 @@ Jede Phase baut auf der vorherigen auf. Innerhalb einer Phase sind die Tickets w
 
 - Timer-Liste sendete `sort=startTime,desc`; das Backend interpoliert den Sort-Wert direkt
   in natives SQL (`column te.starttime does not exist`). Frontend sendet keinen `sort`-Param
-  mehr. (Backend-seitiges Sort-Mapping bleibt ein offener Härtungspunkt.)
+  mehr. Inzwischen verwirft `TimeEntryService.findAll` jeden Client-Sort, der Härtungspunkt ist erledigt.
 
 ---
 

@@ -11,6 +11,9 @@ import com.ch3xy.dash.project.ProjectService;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
 import com.ch3xy.dash.report.dto.TrendReportResponse;
+import com.ch3xy.dash.tag.TagRequest;
+import com.ch3xy.dash.tag.TagResponse;
+import com.ch3xy.dash.tag.TagService;
 import com.ch3xy.dash.timeentry.TimeEntryRequest;
 import com.ch3xy.dash.timeentry.TimeEntryService;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,7 @@ class ReportAggregationIntegrationTest extends AbstractIntegrationTest {
     @Autowired ClientService clientService;
     @Autowired ProjectService projectService;
     @Autowired TimeEntryService timeEntryService;
+    @Autowired TagService tagService;
 
     // Isolated reporting window (February 2026) to avoid collisions with other tests.
     private static final LocalDate FROM = LocalDate.of(2026, 2, 1);
@@ -63,6 +67,39 @@ class ReportAggregationIntegrationTest extends AbstractIntegrationTest {
         assertThat(summary.revenueAmount()).isEqualByComparingTo("200.00");
         assertThat(summary.groups()).hasSize(1);
         assertThat(summary.groups().get(0).label()).startsWith("Report Project");
+    }
+
+    @Test
+    void summaryGroupsByTagWithoutOvercountingTotals() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Tag Group Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("100.00"), "EUR", null, null, BudgetReset.NONE));
+        TagResponse dev = tagService.create(new TagRequest("dev-" + System.nanoTime(), null));
+        TagResponse meeting = tagService.create(new TagRequest("meeting-" + System.nanoTime(), null));
+
+        // 1h with both tags, 1h untagged
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "both",
+                Instant.parse("2026-02-12T08:00:00Z"), Instant.parse("2026-02-12T09:00:00Z"), true,
+                Set.of(dev.id(), meeting.id())));
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "none",
+                Instant.parse("2026-02-12T10:00:00Z"), Instant.parse("2026-02-12T11:00:00Z"), true, Set.of()));
+
+        ReportFilter filter = new ReportFilter(FROM, TO, null, project.id(), null, null, null, null, GroupBy.TAG);
+        SummaryReportResponse summary = reportService.getSummary(filter);
+
+        assertThat(summary.groupedBy()).isEqualTo("TAG");
+        assertThat(summary.groups()).hasSize(3);
+        assertThat(summary.groups()).anySatisfy(g -> {
+            assertThat(g.label()).isEqualTo(dev.name());
+            assertThat(g.durationSeconds()).isEqualTo(3600);
+        });
+        assertThat(summary.groups()).anySatisfy(g -> {
+            assertThat(g.key()).isNull();
+            assertThat(g.label()).isEqualTo("No tag");
+        });
+        // Totals count each entry once even though it appears in two tag groups.
+        assertThat(summary.totalDurationSeconds()).isEqualTo(7200);
+        assertThat(summary.revenueAmount()).isEqualByComparingTo("200.00");
     }
 
     @Test

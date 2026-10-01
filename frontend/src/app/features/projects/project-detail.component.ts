@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angu
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ProjectApiService } from '../../core/api/project-api.service';
+import { ReportApiService } from '../../core/api/report-api.service';
 import { TaskApiService } from '../../core/api/task-api.service';
 import {
   BudgetStatus,
@@ -10,6 +11,7 @@ import {
   ProjectRate,
   ProjectStatus,
   Task,
+  TaskInput,
 } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
@@ -71,12 +73,23 @@ type Tab = 'tasks' | 'rates';
             </div>
             @if (tasks().length === 0) { <div class="muted">Noch keine Tasks.</div> }
             @for (t of tasks(); track t.id) {
-              <div class="row-between" style="padding: var(--sp-2) 0; border-bottom: 1px solid var(--border);">
-                <span>{{ t.name }} @if (t.archived) { <span class="badge muted">archiviert</span> }</span>
-                <div class="row gap-2">
-                  @if (t.hourlyRateOverride) { <span class="mono faint">{{ t.hourlyRateOverride | money: p.currencyCode }}</span> }
-                  @if (!t.archived) { <button class="btn btn-ghost btn-sm" (click)="archiveTask(t)">Archivieren</button> }
+              <div class="task-row">
+                <div class="row-between">
+                  <span>
+                    {{ t.name }}
+                    @if (t.archived) { <span class="badge muted">archiviert</span> }
+                    @if (!t.billableByDefault) { <span class="badge muted">nicht abrechenbar</span> }
+                  </span>
+                  <div class="row gap-2">
+                    <span class="mono faint">{{ trackedSeconds(t) | duration: 'HH:MM' }}@if (t.estimatedMinutes) { / {{ t.estimatedMinutes * 60 | duration: 'HH:MM' }} }</span>
+                    @if (t.hourlyRateOverride) { <span class="mono faint">{{ t.hourlyRateOverride | money: p.currencyCode }}</span> }
+                    <button class="btn btn-ghost btn-sm" (click)="editTask(t)">Bearbeiten</button>
+                    @if (!t.archived) { <button class="btn btn-ghost btn-sm" (click)="archiveTask(t)">Archivieren</button> }
+                  </div>
                 </div>
+                @if (t.estimatedMinutes) {
+                  <div class="progress mt-2" [class]="estimateClass(t)"><span [style.width.%]="min(estimatePercent(t), 100)"></span></div>
+                }
               </div>
             }
           </div>
@@ -107,11 +120,39 @@ type Tab = 'tasks' | 'rates';
         <div class="state"><div class="spinner"></div></div>
       }
     </div>
+
+    @if (editingTask(); as t) {
+      <div class="dialog-backdrop" (click)="closeTask()">
+        <div class="dialog" (click)="$event.stopPropagation()">
+          <div class="dialog-header">
+            <h3>Task bearbeiten</h3>
+            <button class="btn btn-ghost btn-icon" (click)="closeTask()">✕</button>
+          </div>
+          <div class="dialog-body">
+            <div class="field"><label>Name *</label><input class="input" [(ngModel)]="taskForm.name" /></div>
+            <div class="field"><label>Beschreibung</label><textarea class="textarea" [(ngModel)]="taskForm.description"></textarea></div>
+            <div class="form-row">
+              <div class="field">
+                <label>Stundensatz-Override</label>
+                <input class="input mono" type="number" [(ngModel)]="taskRate" placeholder="Projektsatz" />
+              </div>
+              <div class="field"><label>Schätzung (h)</label><input class="input mono" type="number" [(ngModel)]="taskEstimateHours" /></div>
+            </div>
+            <label class="switch"><input type="checkbox" [(ngModel)]="taskForm.billableByDefault" /> Standardmäßig abrechenbar</label>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn" (click)="closeTask()">Abbrechen</button>
+            <button class="btn btn-primary" (click)="saveTask(t)" [disabled]="!taskForm.name.trim()">Speichern</button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: var(--sp-3) var(--sp-4);
            color: var(--text-muted); cursor: pointer; font-size: var(--fs-md); font-weight: 500; }
     .tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+    .task-row { padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); }
   `],
 })
 export class ProjectDetailComponent {
@@ -119,6 +160,7 @@ export class ProjectDetailComponent {
 
   private readonly api = inject(ProjectApiService);
   private readonly taskApi = inject(TaskApiService);
+  private readonly reportApi = inject(ReportApiService);
   private readonly toast = inject(ToastService);
 
   protected readonly statuses: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
@@ -127,6 +169,12 @@ export class ProjectDetailComponent {
   protected readonly tasks = signal<Task[]>([]);
   protected readonly rates = signal<ProjectRate[]>([]);
   protected readonly tab = signal<Tab>('tasks');
+  /** taskId -> tracked seconds over the whole project lifetime */
+  protected readonly taskSeconds = signal<Record<string, number>>({});
+  protected readonly editingTask = signal<Task | null>(null);
+  protected taskForm: TaskInput & { name: string } = { name: '' };
+  protected taskRate: number | null = null;
+  protected taskEstimateHours: number | null = null;
 
   protected newTask = '';
   protected rateValue: number | null = null;
@@ -141,8 +189,35 @@ export class ProjectDetailComponent {
     const id = this.id();
     this.api.get(id).subscribe((p) => this.project.set(p));
     this.api.budgetStatus(id).subscribe((b) => this.budget.set(b));
-    this.taskApi.getForProject(id, true).subscribe((t) => this.tasks.set(t));
+    this.loadTasks();
     this.api.rates(id).subscribe((r) => this.rates.set(r));
+  }
+
+  private loadTasks(): void {
+    const id = this.id();
+    this.taskApi.getForProject(id, true).subscribe((t) => this.tasks.set(t));
+    this.reportApi.summary({ projectId: id, groupBy: 'TASK' }).subscribe((s) => {
+      const map: Record<string, number> = {};
+      for (const g of s.groups) {
+        if (g.key) {
+          map[g.key] = g.durationSeconds;
+        }
+      }
+      this.taskSeconds.set(map);
+    });
+  }
+
+  trackedSeconds(t: Task): number {
+    return this.taskSeconds()[t.id] ?? 0;
+  }
+
+  estimatePercent(t: Task): number {
+    return t.estimatedMinutes ? (this.trackedSeconds(t) / 60 / t.estimatedMinutes) * 100 : 0;
+  }
+
+  estimateClass(t: Task): string {
+    const pct = this.estimatePercent(t);
+    return pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : 'ok';
   }
 
   protected min(a: number, b: number): number {
@@ -165,16 +240,47 @@ export class ProjectDetailComponent {
     if (!this.newTask.trim()) {
       return;
     }
-    this.taskApi.create(this.id(), { name: this.newTask.trim() }).subscribe(() => {
+    const billableByDefault = this.project()?.billableByDefault ?? true;
+    this.taskApi.create(this.id(), { name: this.newTask.trim(), billableByDefault }).subscribe(() => {
       this.newTask = '';
-      this.taskApi.getForProject(this.id(), true).subscribe((t) => this.tasks.set(t));
+      this.loadTasks();
     });
   }
 
   archiveTask(t: Task): void {
-    this.taskApi.archive(t.id).subscribe(() =>
-      this.taskApi.getForProject(this.id(), true).subscribe((tasks) => this.tasks.set(tasks)),
-    );
+    this.taskApi.archive(t.id).subscribe(() => this.loadTasks());
+  }
+
+  editTask(t: Task): void {
+    this.taskForm = {
+      name: t.name,
+      description: t.description,
+      billableByDefault: t.billableByDefault,
+    };
+    this.taskRate = t.hourlyRateOverride != null ? Number(t.hourlyRateOverride) : null;
+    this.taskEstimateHours = t.estimatedMinutes != null ? t.estimatedMinutes / 60 : null;
+    this.editingTask.set(t);
+  }
+
+  closeTask(): void {
+    this.editingTask.set(null);
+  }
+
+  saveTask(t: Task): void {
+    if (!this.taskForm.name.trim()) {
+      return;
+    }
+    const payload: TaskInput = {
+      ...this.taskForm,
+      name: this.taskForm.name.trim(),
+      hourlyRateOverride: this.taskRate != null ? this.taskRate.toFixed(2) : null,
+      estimatedMinutes: this.taskEstimateHours != null ? Math.round(this.taskEstimateHours * 60) : null,
+    };
+    this.taskApi.update(t.id, payload).subscribe(() => {
+      this.toast.success('Task gespeichert');
+      this.closeTask();
+      this.loadTasks();
+    });
   }
 
   addRate(p: Project): void {

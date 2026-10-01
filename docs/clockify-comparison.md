@@ -1,6 +1,6 @@
 # Clockify vs. Dash — Feature-Vergleich
 
-Stand: 2026-07-05
+Stand: 2026-10-01
 
 ---
 
@@ -19,7 +19,9 @@ Stand: 2026-07-05
 | Projekt + Task + Tags am Timer | ✅ | ✅ (Timer-Bar inkl. Tag-Auswahl) |
 | Timer-Ansicht: Tages-Navigation | ✅ | ✅ |
 | Timer-Ansicht: Gruppierung gleicher Einträge | ✅ | ✅ |
-| Timesheet-Wochenansicht | ✅ | ✅ |
+| Timesheet-Wochenansicht (Zeilen je Projekt + Task) | ✅ | ✅ |
+| Timesheet: direkte Zelleingabe (1:30, 1,5, 90m) | ✅ | ✅ (Backend ergänzt/kürzt Einträge) |
+| Timesheet: Vorwoche kopieren | ✅ | ✅ |
 | Kalender-Wochenansicht | ✅ | ✅ |
 | Kalender: Drag-to-Create | ✅ | ✅ (15-Min-Snap) |
 | Kalender: Drag-to-Move / Drag-to-Resize | ✅ | ✅ |
@@ -31,7 +33,8 @@ Stand: 2026-07-05
 | Projekt-Verwaltung (CRUD) | ✅ | ✅ |
 | Projekt-Farben (alle Ansichten) | ✅ | ✅ |
 | Projekt-Status (Aktiv/Archiviert…) | ✅ | ✅ |
-| Task-Verwaltung | ✅ | ✅ |
+| Task-Verwaltung inkl. Rate-Override, Billable-Default, Schätzung | ✅ | ✅ |
+| Task-Schätzung vs. erfasste Zeit | ✅ | ✅ (Fortschrittsbalken im Projekt-Detail) |
 | Tags | ✅ | ✅ |
 | Stundensatz je Projekt / Task-Override | ✅ | ✅ |
 | Stundensatz-Historie | ✅ | ✅ |
@@ -45,7 +48,8 @@ Stand: 2026-07-05
 | Attendance-Report (erster/letzter Eintrag, Pausen) | ✅ | ✅ |
 | Chart-Drill-Down (Balken klicken → Filter) | ✅ | ✅ |
 | Gespeicherte Report-Views | ✅ | ✅ (localStorage) |
-| Report-Filter (Zeitraum, Projekt, Kunde, Tag, Billable) | ✅ | ✅ |
+| Report-Filter (Zeitraum, Kunde, Projekt, Task, Tag, Billable, Beschreibung) | ✅ | ✅ |
+| Report-Gruppierung (Kunde, Projekt, Task, Tag, Datum, Woche, Monat) | ✅ | ✅ (Totals ohne Doppelzählung bei Mehrfach-Tags) |
 | Report-Filter in URL persistent | ✅ | ✅ |
 | Gerundete Dauern umschaltbar | ✅ | ✅ |
 | CSV-/XLSX-Export | ✅ | ✅ |
@@ -72,6 +76,7 @@ Stand: 2026-07-05
 | Erinnerungen / Idle-Detection | Clockify erkennt Inaktivität. Erfordert Desktop-Agent — außerhalb des Web-App-Scopes. |
 | Projekt-Template | Projekte aus einer Vorlage anlegen. Bei Einzelnutzung selten nötig. |
 | Recent-Projects-Dropdown direkt in der Timer-Bar | In Dash über Quick-Start-Buttons auf der Timer-Seite gelöst. |
+| PDF-Export von Reports | Aktuell nicht benötigt; CSV/XLSX decken den Bedarf. |
 
 ---
 

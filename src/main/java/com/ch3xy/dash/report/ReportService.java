@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -62,13 +61,11 @@ public class ReportService {
         RoundingRule rule = rounded ? settingsService.getRoundingRule() : RoundingRule.NONE;
         int minutes = rounded ? settingsService.getRoundingMinutes() : 0;
         List<SummaryGroup> groups = queryRepository.summaryGrouped(effective, rule, minutes);
+        ReportQueryRepository.SummaryTotals totals = queryRepository.summaryTotals(effective, rule, minutes);
 
-        long total = groups.stream().mapToLong(SummaryGroup::durationSeconds).sum();
-        long billable = groups.stream().mapToLong(SummaryGroup::billableDurationSeconds).sum();
-        BigDecimal revenue = groups.stream()
-                .map(SummaryGroup::revenueAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+        long total = totals.totalSeconds();
+        long billable = totals.billableSeconds();
+        BigDecimal revenue = totals.revenue();
         double ratio = total > 0 ? (double) billable / total : 0.0;
 
         return new SummaryReportResponse(

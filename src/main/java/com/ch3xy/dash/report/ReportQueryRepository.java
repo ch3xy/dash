@@ -44,10 +44,11 @@ public class ReportQueryRepository {
                 JOIN projects p ON p.id = te.project_id
                 LEFT JOIN clients c ON c.id = p.client_id
                 LEFT JOIN tasks t ON t.id = te.task_id
+                %s
                 WHERE %s
                 GROUP BY group_key, group_label
                 ORDER BY total_seconds DESC
-                """.formatted(keyExpr, labelExpr, dur, dur, whereClause());
+                """.formatted(keyExpr, labelExpr, dur, dur, tagJoin(filter.groupBy()), whereClause());
 
         return jdbc.query(sql, params(filter), (rs, rowNum) -> new SummaryGroup(
                 rs.getString("group_key"),
@@ -57,6 +58,31 @@ public class ReportQueryRepository {
                 rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP)
         ));
     }
+
+    /**
+     * Ungrouped totals for the filter. Needed separately from the groups because
+     * grouping by tag counts an entry once per tag, so summing groups would overcount.
+     */
+    public SummaryTotals summaryTotals(ReportFilter filter, RoundingRule rule, int minutes) {
+        String dur = durationExpr(rule, minutes);
+        String sql = """
+                SELECT COALESCE(SUM(%s), 0) AS total_seconds,
+                       COALESCE(SUM(CASE WHEN te.billable THEN %s ELSE 0 END), 0) AS billable_seconds,
+                       COALESCE(SUM(CASE WHEN te.billable THEN te.amount_snapshot ELSE 0 END), 0) AS revenue
+                FROM time_entries te
+                JOIN projects p ON p.id = te.project_id
+                LEFT JOIN clients c ON c.id = p.client_id
+                LEFT JOIN tasks t ON t.id = te.task_id
+                WHERE %s
+                """.formatted(dur, dur, whereClause());
+        return jdbc.queryForObject(sql, params(filter), (rs, rowNum) -> new SummaryTotals(
+                rs.getLong("total_seconds"),
+                rs.getLong("billable_seconds"),
+                rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP)
+        ));
+    }
+
+    public record SummaryTotals(long totalSeconds, long billableSeconds, BigDecimal revenue) {}
 
     public List<TrendPoint> trend(ReportFilter filter, GroupBy granularity, RoundingRule rule, int minutes) {
         String periodExpr = switch (granularity) {
@@ -198,6 +224,7 @@ public class ReportQueryRepository {
             case PROJECT -> "CAST(p.id AS text)";
             case CLIENT -> "CAST(c.id AS text)";
             case TASK -> "CAST(t.id AS text)";
+            case TAG -> "CAST(tg.id AS text)";
             case DAY -> "to_char(te.entry_date, 'YYYY-MM-DD')";
             case WEEK -> "to_char(date_trunc('week', te.entry_date), 'YYYY-MM-DD')";
             case MONTH -> "to_char(te.entry_date, 'YYYY-MM')";
@@ -209,10 +236,17 @@ public class ReportQueryRepository {
             case PROJECT -> "p.name";
             case CLIENT -> "COALESCE(c.name, 'No client')";
             case TASK -> "COALESCE(t.name, 'No task')";
+            case TAG -> "COALESCE(tg.name, 'No tag')";
             case DAY -> "to_char(te.entry_date, 'YYYY-MM-DD')";
             case WEEK -> "to_char(date_trunc('week', te.entry_date), 'YYYY-MM-DD')";
             case MONTH -> "to_char(te.entry_date, 'YYYY-MM')";
         };
+    }
+
+    private String tagJoin(GroupBy groupBy) {
+        return groupBy == GroupBy.TAG
+                ? "LEFT JOIN time_entry_tags gtt ON gtt.time_entry_id = te.id LEFT JOIN tags tg ON tg.id = gtt.tag_id"
+                : "";
     }
 
     private String whereClause() {

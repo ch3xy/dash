@@ -372,6 +372,26 @@ Live-Update laufender Timer (Beschreibung, Projekt, Task, Tags, Billable):
 
 ---
 
+## Timesheet
+
+### `PUT /timesheet/cell` → `204`
+
+Setzt die Gesamtdauer einer Zelle (Projekt + optional Task an einem Tag). Mehr Zeit wird als neuer Eintrag nach dem letzten Eintrag des Tages angehängt (sonst ab 09:00 App-Zeitzone; Billable aus Task- bzw. Projekt-Default). Weniger Zeit kürzt die jüngsten Einträge der Zelle und löscht solche, die auf 0 schrumpfen.
+```json
+{ "projectId": "uuid", "taskId": "uuid|null", "date": "2026-10-01", "durationSeconds": 5400 }
+```
+`durationSeconds` 0–86400. Fehler: `404` Projekt/Task fehlt, `422` Task gehört nicht zum Projekt.
+
+### `POST /timesheet/copy-week` → `201`
+
+Kopiert alle Einträge der Woche (Mo–So) von `source` in die Woche von `target` mit gleichen lokalen Uhrzeiten. Stundensätze werden für das neue Datum neu ermittelt. Antwort: Liste der erzeugten `TimeEntry`.
+```json
+{ "source": "2026-09-22", "target": "2026-09-29" }
+```
+Fehler: `422`, wenn beide Daten in derselben Woche liegen.
+
+---
+
 ## Reports
 
 Alle Reports: Query-Params als Filter.
@@ -387,7 +407,8 @@ Alle Reports: Query-Params als Filter.
 | `taskId` | uuid[] | Task(s) |
 | `tagId` | uuid[] | Tag(s) |
 | `billable` | boolean | Nur abrechenbar/nicht |
-| `groupBy` | string | Gruppierungsfeld |
+| `q` | string | Beschreibungssuche (enthält, case-insensitive) |
+| `groupBy` | string | `PROJECT`, `CLIENT`, `TASK`, `TAG`, `DAY`, `WEEK`, `MONTH`. Bei `TAG` erscheint ein Eintrag mit mehreren Tags in jeder seiner Gruppen; Einträge ohne Tag landen in „No tag“ (`key: null`). Die Totals zählen jeden Eintrag genau einmal. |
 | `rounded` | boolean | Gerundete Dauer verwenden |
 
 ### `GET /reports/summary`

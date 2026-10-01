@@ -8,6 +8,8 @@ import { ClientApiService } from '../../core/api/client-api.service';
 import { DialogService } from '../../core/dialog.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { ReportApiService } from '../../core/api/report-api.service';
+import { TagApiService } from '../../core/api/tag-api.service';
+import { TaskApiService } from '../../core/api/task-api.service';
 import {
   AttendanceReport,
   BudgetReportRow,
@@ -20,6 +22,8 @@ import {
   Project,
   ReportFilter,
   SummaryReport,
+  Tag,
+  Task,
   TimeEntry,
   TrendReport,
 } from '../../core/models';
@@ -29,7 +33,7 @@ import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
 
-const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'DAY', 'WEEK', 'MONTH'];
+const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'];
 
 type DetailRow =
   | { kind: 'header'; label: string }
@@ -57,10 +61,30 @@ type DetailRow =
         </div>
         <div class="field">
           <label>Projekt</label>
-          <select class="select" [ngModel]="f().projectId" (ngModelChange)="patch({ projectId: $event })">
+          <select class="select" [ngModel]="f().projectId" (ngModelChange)="patch({ projectId: $event, taskId: undefined })">
             <option [ngValue]="undefined">Alle</option>
             @for (p of projects(); track p.id) { <option [ngValue]="p.id">{{ p.name }}</option> }
           </select>
+        </div>
+        <div class="field">
+          <label>Task</label>
+          <select class="select" [ngModel]="f().taskId" (ngModelChange)="patch({ taskId: $event })"
+                  [disabled]="!f().projectId" [title]="f().projectId ? '' : 'Zuerst Projekt wählen'">
+            <option [ngValue]="undefined">Alle</option>
+            @for (t of tasks(); track t.id) { <option [ngValue]="t.id">{{ t.name }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label>Tag</label>
+          <select class="select" [ngModel]="f().tagId" (ngModelChange)="patch({ tagId: $event })">
+            <option [ngValue]="undefined">Alle</option>
+            @for (t of tags(); track t.id) { <option [ngValue]="t.id">{{ t.name }}</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label>Beschreibung</label>
+          <input class="input" type="search" placeholder="Suchen…" [ngModel]="f().q ?? ''"
+                 (change)="patch({ q: $any($event.target).value.trim() || undefined })" />
         </div>
         <div class="field">
           <label>Abrechenbar</label>
@@ -228,16 +252,16 @@ type DetailRow =
           @if (detailed(); as d) { <span class="muted">{{ d.totalElements }} Einträge</span> }
         </div>
         <table class="table">
-          <thead><tr><th>Datum</th><th>Projekt</th><th>Beschreibung</th><th>Zeit</th><th class="num">Dauer</th><th class="num">Betrag</th></tr></thead>
+          <thead><tr><th>Datum</th><th>Projekt</th><th>Beschreibung</th><th>Tags</th><th>Zeit</th><th class="num">Dauer</th><th class="num">Betrag</th></tr></thead>
           <tbody>
             @for (r of detailedRows(); track $index) {
               @if (r.kind === 'header') {
                 <tr class="group-hd-row">
-                  <td colspan="6"><strong>{{ r.label }}</strong></td>
+                  <td colspan="7"><strong>{{ r.label }}</strong></td>
                 </tr>
               } @else if (r.kind === 'subtotal') {
                 <tr class="subtotal-row">
-                  <td colspan="4" class="faint" style="font-size: var(--fs-sm); text-align: right;">Zwischensumme</td>
+                  <td colspan="5" class="faint" style="font-size: var(--fs-sm); text-align: right;">Zwischensumme</td>
                   <td class="num mono">{{ r.totalSeconds | duration: 'HH:MM' }}</td>
                   <td class="num mono">{{ r.revenueAmount | money }}</td>
                 </tr>
@@ -246,6 +270,11 @@ type DetailRow =
                   <td class="mono">{{ r.entry.entryDate }}</td>
                   <td>{{ r.entry.projectName }}@if (r.entry.taskName) { <span class="faint"> · {{ r.entry.taskName }}</span> }</td>
                   <td>{{ r.entry.description || '—' }}</td>
+                  <td>
+                    @for (tg of r.entry.tags; track tg.id) {
+                      <span class="badge" [style.background]="tg.color || null">{{ tg.name }}</span>
+                    } @empty { <span class="faint">—</span> }
+                  </td>
                   <td class="mono faint">{{ time(r.entry.startTime) }}–{{ time(r.entry.endTime) }}</td>
                   <td class="num mono">{{ r.entry.durationSeconds | duration: 'HH:MM' }}</td>
                   <td class="num mono">{{ r.entry.amountSnapshot | money: r.entry.currencyCodeSnapshot || 'EUR' }}</td>
@@ -294,6 +323,8 @@ export class ReportsComponent {
   private readonly reportApi = inject(ReportApiService);
   private readonly projectApi = inject(ProjectApiService);
   private readonly clientApi = inject(ClientApiService);
+  private readonly taskApi = inject(TaskApiService);
+  private readonly tagApi = inject(TagApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly dialog = inject(DialogService);
@@ -301,6 +332,8 @@ export class ReportsComponent {
   protected readonly groupOptions = GROUP_OPTIONS;
   protected readonly projects = signal<Project[]>([]);
   protected readonly clients = signal<Client[]>([]);
+  protected readonly tasks = signal<Task[]>([]);
+  protected readonly tags = signal<Tag[]>([]);
   protected readonly summary = signal<SummaryReport | null>(null);
   protected readonly trend = signal<TrendReport | null>(null);
   protected readonly budget = signal<BudgetReportRow[]>([]);
@@ -313,11 +346,15 @@ export class ReportsComponent {
     if (!page) return [];
     const groupBy = this.f().groupBy ?? 'PROJECT';
 
+    const tagLabel = (e: TimeEntry): string | null =>
+      e.tags.length ? e.tags.map((t) => t.name).sort().join(', ') : null;
+
     const getKey = (e: TimeEntry): string => {
       switch (groupBy) {
         case 'PROJECT': return e.projectId;
         case 'CLIENT':  return e.clientId ?? '__none__';
         case 'TASK':    return e.taskId ?? '__none__';
+        case 'TAG':     return tagLabel(e) ?? '__none__';
         case 'DAY':     return e.entryDate;
         case 'WEEK':    return toIsoDate(startOfWeek(new Date(e.entryDate + 'T12:00:00')));
         case 'MONTH':   return e.entryDate.slice(0, 7);
@@ -329,6 +366,7 @@ export class ReportsComponent {
         case 'PROJECT': return e.projectName;
         case 'CLIENT':  return e.clientName ?? '(kein Kunde)';
         case 'TASK':    return e.taskName ?? '(kein Task)';
+        case 'TAG':     return tagLabel(e) ?? '(kein Tag)';
         case 'DAY':     return e.entryDate;
         case 'WEEK':    return 'Woche ab ' + toIsoDate(startOfWeek(new Date(e.entryDate + 'T12:00:00')));
         case 'MONTH':   return e.entryDate.slice(0, 7);
@@ -408,7 +446,17 @@ export class ReportsComponent {
   constructor() {
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.clientApi.getAll().subscribe((c) => this.clients.set(c));
+    this.tagApi.getAll().subscribe((t) => this.tags.set(t));
     this.loadHeatmap();
+    // Task options depend on the selected project.
+    effect(() => {
+      const projectId = this.f().projectId;
+      if (!projectId) {
+        this.tasks.set([]);
+        return;
+      }
+      this.taskApi.getForProject(projectId).subscribe((t) => this.tasks.set(t));
+    });
     // React to filter changes.
     effect(() => {
       const filter = this.f();
@@ -435,6 +483,9 @@ export class ReportsComponent {
       to: p['to'] ?? def.to,
       clientId: p['clientId'] || undefined,
       projectId: p['projectId'] || undefined,
+      taskId: p['taskId'] || undefined,
+      tagId: p['tagId'] || undefined,
+      q: p['q'] || undefined,
       billable: p['billable'] === undefined ? undefined : p['billable'] === 'true',
       groupBy: (p['groupBy'] as GroupBy) ?? 'PROJECT',
       rounded: p['rounded'] === 'true' ? true : undefined,
@@ -488,7 +539,7 @@ export class ReportsComponent {
   }
 
   drillable(s: SummaryReport): boolean {
-    return ['PROJECT', 'CLIENT', 'DAY', 'WEEK', 'MONTH'].includes(s.groupedBy);
+    return ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'].includes(s.groupedBy);
   }
 
   /** Click on a chart bar narrows the report filter to that group. */
@@ -500,6 +551,13 @@ export class ReportsComponent {
         break;
       case 'CLIENT':
         this.patch({ clientId: d.key });
+        break;
+      case 'TASK':
+        // The task select only lists tasks of the selected project, so set both.
+        this.taskApi.get(d.key).subscribe((t) => this.patch({ projectId: t.projectId, taskId: t.id }));
+        break;
+      case 'TAG':
+        this.patch({ tagId: d.key });
         break;
       case 'DAY':
         this.patch({ from: d.key, to: d.key, groupBy: 'PROJECT' });
