@@ -72,7 +72,7 @@ type Interact =
     <div class="page cal-page">
       <div class="page-header">
         <h1>Kalender</h1>
-        <div class="row">
+        <div class="page-controls">
           <div class="row zoom" role="group" aria-label="Zoom">
             <button type="button" class="btn btn-sm btn-icon" (click)="zoomBy(1 / ZOOM_STEP)" [disabled]="zoom() <= MIN_ZOOM"
                     title="Verkleinern" aria-label="Verkleinern"><svg lucideZoomOut [size]="16"></svg></button>

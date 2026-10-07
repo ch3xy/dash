@@ -2,6 +2,7 @@ package com.ch3xy.dash.report;
 
 import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
+import com.ch3xy.dash.report.dto.DailyBreakdownResponse.ProjectSegment;
 import com.ch3xy.dash.report.dto.HeatmapResponse.HeatmapDay;
 import com.ch3xy.dash.report.dto.SummaryReportResponse.SummaryGroup;
 import com.ch3xy.dash.report.dto.TrendReportResponse.TrendPoint;
@@ -14,6 +15,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Native SQL aggregations for reporting. Grouping/granularity expressions are
@@ -247,6 +249,44 @@ public class ReportQueryRepository {
         return groupBy == GroupBy.TAG
                 ? "LEFT JOIN time_entry_tags gtt ON gtt.time_entry_id = te.id LEFT JOIN tags tg ON tg.id = gtt.tag_id"
                 : "";
+    }
+
+    /**
+     * Per-day, per-project aggregation. Returns one row per (date, project) combination,
+     * ordered by date ASC, then seconds DESC (dominant project first on each day).
+     */
+    public List<ProjectSegment> dailyProjectRows(ReportFilter filter) {
+        String sql = """
+                SELECT to_char(te.entry_date, 'YYYY-MM-DD') AS date,
+                       CAST(p.id AS text) AS project_id,
+                       p.name                               AS project_name,
+                       p.color                              AS project_color,
+                       SUM(te.duration_seconds)             AS duration_seconds
+                FROM time_entries te
+                JOIN projects p ON p.id = te.project_id
+                LEFT JOIN clients c ON c.id = p.client_id
+                LEFT JOIN tasks t  ON t.id  = te.task_id
+                WHERE %s
+                GROUP BY te.entry_date, p.id, p.name, p.color
+                ORDER BY te.entry_date, duration_seconds DESC
+                """.formatted(whereClause());
+        return jdbc.query(sql, params(filter), (rs, rowNum) -> new ProjectSegment(
+                rs.getString("date"),
+                rs.getString("project_id"),
+                rs.getString("project_name"),
+                rs.getString("project_color"),
+                rs.getLong("duration_seconds")
+        ));
+    }
+
+    /** Convenience: a date-keyed map (String YYYY-MM-DD → rows) built from {@link #dailyProjectRows}. */
+    public Map<String, List<ProjectSegment>> dailyProjectRowsByDate(ReportFilter filter) {
+        var rows = dailyProjectRows(filter);
+        var map = new java.util.LinkedHashMap<String, List<ProjectSegment>>();
+        for (var row : rows) {
+            map.computeIfAbsent(row.date(), k -> new java.util.ArrayList<>()).add(row);
+        }
+        return map;
     }
 
     private String whereClause() {

@@ -63,9 +63,9 @@ export function parseDuration(input: string): number | null {
     <div class="page">
       <div class="page-header">
         <h1>Timesheet</h1>
-        <div class="row">
-          <app-date-range-picker mode="week" ariaLabel="Woche" [range]="week()" (rangeChange)="setWeek($event)" />
+        <div class="page-controls">
           <button class="btn btn-sm" (click)="copyPreviousWeek()" [disabled]="saving()">Vorwoche kopieren</button>
+          <app-date-range-picker mode="week" ariaLabel="Woche" [range]="week()" (rangeChange)="setWeek($event)" />
         </div>
       </div>
 

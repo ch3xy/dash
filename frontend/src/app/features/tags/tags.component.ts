@@ -10,6 +10,7 @@ import { LucidePlus } from '@lucide/angular';
 @Component({
   selector: 'app-tags',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`:host .page { max-width: 860px; margin: 0 auto; }`],
   imports: [FormsModule, LucidePlus],
   template: `
     <div class="page">

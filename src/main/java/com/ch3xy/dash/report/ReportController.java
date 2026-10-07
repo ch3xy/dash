@@ -3,6 +3,7 @@ package com.ch3xy.dash.report;
 import com.ch3xy.dash.common.pagination.PageResponse;
 import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
+import com.ch3xy.dash.report.dto.DailyBreakdownResponse;
 import com.ch3xy.dash.report.dto.HeatmapResponse;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
 import com.ch3xy.dash.report.dto.TrendReportResponse;
@@ -94,6 +95,15 @@ public class ReportController {
             @Parameter(description = "Zeitliche Granularität der Aggregation: DAY, WEEK oder MONTH. Standard ist DAY.") @RequestParam(required = false) GroupBy granularity,
             @Parameter(description = "Wenn true, werden Dauern gemäß der App-Rundungsregel gerundet.") @RequestParam(defaultValue = "false") boolean rounded) {
         return ResponseEntity.ok(service.getTrends(params.toFilter(), granularity, rounded));
+    }
+
+    @Operation(
+            summary = "Tägliche Aufschlüsselung nach Projekten abrufen",
+            description = "Gibt für jeden Kalendertag des angeforderten Zeitraums die Stunden pro Projekt zurück. Jeder Tag ist immer vorhanden – auch wenn keine Einträge existieren (totalSeconds=0). Geeignet für gestapelte Balkendiagramme."
+    )
+    @GetMapping("/daily-breakdown")
+    public ResponseEntity<DailyBreakdownResponse> dailyBreakdown(@ParameterObject FilterParams params) {
+        return ResponseEntity.ok(service.getDailyBreakdown(params.toFilter()));
     }
 
     @Operation(

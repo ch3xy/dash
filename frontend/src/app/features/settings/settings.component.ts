@@ -11,6 +11,7 @@ import { FileDropzoneComponent } from '../../shared/components/file-dropzone.com
 @Component({
   selector: 'app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`:host .page { max-width: 860px; margin: 0 auto; }`],
   imports: [FormsModule, LucideDownload, FileDropzoneComponent],
   template: `
     <div class="page" style="max-width: 720px;">

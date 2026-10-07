@@ -2,6 +2,9 @@ package com.ch3xy.dash.report;
 
 import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
+import com.ch3xy.dash.report.dto.DailyBreakdownResponse;
+import com.ch3xy.dash.report.dto.DailyBreakdownResponse.DayEntry;
+import com.ch3xy.dash.report.dto.DailyBreakdownResponse.ProjectSegment;
 import com.ch3xy.dash.report.dto.HeatmapResponse;
 import com.ch3xy.dash.report.dto.HeatmapResponse.HeatmapDay;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
@@ -117,6 +120,36 @@ public class ReportService {
         int minutes = rounded ? settingsService.getRoundingMinutes() : 0;
         List<TrendPoint> data = queryRepository.trend(filter, g, rule, minutes);
         return new TrendReportResponse(g.name(), data);
+    }
+
+    // --- Daily breakdown (stacked bar chart) ---------------------------------
+
+    /**
+     * Returns one {@link DayEntry} for every calendar day between filter.from and filter.to
+     * (inclusive). Days without entries have totalSeconds=0 and an empty projects list.
+     * Projects within each day are ordered by their contribution descending.
+     */
+    public DailyBreakdownResponse getDailyBreakdown(ReportFilter filter) {
+        LocalDate from = filter.from() != null ? filter.from()
+                : LocalDate.now(settingsService.getTimezone()).minusDays(29);
+        LocalDate to = filter.to() != null ? filter.to()
+                : LocalDate.now(settingsService.getTimezone());
+
+        Map<String, List<ProjectSegment>> byDate = queryRepository.dailyProjectRowsByDate(filter);
+
+        List<DayEntry> days = new ArrayList<>();
+        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+            String key = d.toString();
+            List<ProjectSegment> segs = byDate.getOrDefault(key, List.of());
+            long total = segs.stream().mapToLong(ProjectSegment::durationSeconds).sum();
+            // Strip the internal `date` field — the caller already knows it from DayEntry.date
+            List<DailyBreakdownResponse.ProjectSegment> out = segs.stream()
+                    .map(s -> new DailyBreakdownResponse.ProjectSegment(
+                            s.date(), s.projectId(), s.projectName(), s.projectColor(), s.durationSeconds()))
+                    .toList();
+            days.add(new DayEntry(key, total, out));
+        }
+        return new DailyBreakdownResponse(days);
     }
 
     // --- Heatmap ---------------------------------------------------------

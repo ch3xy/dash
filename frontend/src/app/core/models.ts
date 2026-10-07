@@ -266,6 +266,24 @@ export interface TrendReport {
   data: TrendPoint[];
 }
 
+export interface DailyProjectSegment {
+  date: IsoDate;
+  projectId: string;
+  projectName: string;
+  projectColor: string | null;
+  durationSeconds: number;
+}
+
+export interface DailyBreakdownDay {
+  date: IsoDate;
+  totalSeconds: number;
+  projects: DailyProjectSegment[];
+}
+
+export interface DailyBreakdown {
+  days: DailyBreakdownDay[];
+}
+
 export interface HeatmapPoint {
   date: IsoDate;
   durationSeconds: number;

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import {
   AttendanceReport,
   BudgetReportRow,
+  DailyBreakdown,
   HeatmapReport,
   IsoDate,
   PageResponse,
@@ -47,6 +48,12 @@ export class ReportApiService {
 
   trends(filter: ReportFilter & { granularity?: string }): Observable<TrendReport> {
     return this.http.get<TrendReport>('/reports/trends', {
+      params: toParams(filter as Record<string, unknown>),
+    });
+  }
+
+  dailyBreakdown(filter: ReportFilter): Observable<DailyBreakdown> {
+    return this.http.get<DailyBreakdown>('/reports/daily-breakdown', {
       params: toParams(filter as Record<string, unknown>),
     });
   }

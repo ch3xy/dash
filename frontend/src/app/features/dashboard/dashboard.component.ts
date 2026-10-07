@@ -22,7 +22,9 @@ import { LucideArrowRight } from '@lucide/angular';
     <div class="page">
       <div class="page-header">
         <h1>Dashboard</h1>
-        <app-date-range-picker [range]="range()" (rangeChange)="setRange($event)" align="end" />
+        <div class="page-controls">
+          <app-date-range-picker [range]="range()" (rangeChange)="setRange($event)" align="end" />
+        </div>
       </div>
 
       @if (loading() && !data()) {
@@ -103,26 +105,26 @@ import { LucideArrowRight } from '@lucide/angular';
               <div class="muted">Noch kein Umsatz.</div>
             }
           </div>
-        </div>
 
-        <div class="card card-pad mt-4">
-          <div class="card-title">Top-Projekte (Zeit im Zeitraum)</div>
-          @if (d.topProjects.length) {
-            @for (p of d.topProjects; track p.projectId) {
-              <div style="padding: var(--sp-2) 0;">
-                <div class="row-between" style="margin-bottom: var(--sp-1)">
-                  <span class="row gap-2">
-                    <span class="badge-dot" [style.background]="p.color || 'var(--brand)'"></span>
-                    <a [routerLink]="['/projects', p.projectId]">{{ p.projectName }}</a>
-                  </span>
-                  <span class="mono">{{ p.durationSeconds | duration: 'HH:MM' }}</span>
+          <div class="card card-pad">
+            <div class="card-title">Top-Projekte (Zeit im Zeitraum)</div>
+            @if (d.topProjects.length) {
+              @for (p of d.topProjects; track p.projectId) {
+                <div style="padding: var(--sp-2) 0;">
+                  <div class="row-between" style="margin-bottom: var(--sp-1)">
+                    <span class="row gap-2">
+                      <span class="badge-dot" [style.background]="p.color || 'var(--brand)'"></span>
+                      <a [routerLink]="['/projects', p.projectId]">{{ p.projectName }}</a>
+                    </span>
+                    <span class="mono">{{ p.durationSeconds | duration: 'HH:MM' }}</span>
+                  </div>
+                  <div class="progress"><span [style.width.%]="barWidth(p.durationSeconds, d)"></span></div>
                 </div>
-                <div class="progress"><span [style.width.%]="barWidth(p.durationSeconds, d)"></span></div>
-              </div>
+              }
+            } @else {
+              <div class="muted">Noch keine Einträge.</div>
             }
-          } @else {
-            <div class="muted">Noch keine Einträge.</div>
-          }
+          </div>
         </div>
 
         @if (d.recentEntries.length) {
@@ -152,7 +154,7 @@ import { LucideArrowRight } from '@lucide/angular';
               </tbody>
             </table>
             <div class="card-pad" style="border-top: 1px solid var(--border); text-align: right;">
-              <a routerLink="/timer" class="btn btn-ghost btn-sm">Alle Einträge <svg lucideArrowRight></svg></a>
+              <a routerLink="/reports" class="btn btn-ghost btn-sm">Alle Einträge <svg lucideArrowRight></svg></a>
             </div>
           </div>
         }
@@ -165,7 +167,7 @@ import { LucideArrowRight } from '@lucide/angular';
     .page-header { gap: var(--sp-3); flex-wrap: wrap; }
     .refreshing { opacity: 0.6; transition: opacity 0.15s; }
     @media (max-width: 640px) {
-      .page-header app-date-range-picker { width: 100%; }
+      .page-header .page-controls { width: 100%; }
     }
   `],
 })

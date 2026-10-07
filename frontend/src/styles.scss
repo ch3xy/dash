@@ -137,6 +137,15 @@ a:hover {
 .page-header h1 {
   font-size: var(--fs-2xl);
 }
+/* Flex group that lives at the right end of .page-header.
+   Always ends with the date-range-picker; other controls sit to its left. */
+.page-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
 
 /* ---- Card ---- */
 .card {

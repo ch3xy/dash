@@ -1,11 +1,10 @@
 import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { ClientApiService } from '../../core/api/client-api.service';
-import { DialogService } from '../../core/dialog.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { ReportApiService } from '../../core/api/report-api.service';
 import { TagApiService } from '../../core/api/tag-api.service';
@@ -15,25 +14,23 @@ import {
   BudgetReportRow,
   Client,
   GroupBy,
-  Granularity,
   HeatmapPoint,
   HeatmapReport,
   PageResponse,
   Project,
   ReportFilter,
+  DailyBreakdown,
+  DailyBreakdownDay,
   SummaryGroup,
   SummaryReport,
   Tag,
   Task,
   TimeEntry,
-  TrendReport,
 } from '../../core/models';
-import { BarChartComponent, BarDatum } from '../../shared/components/bar-chart.component';
-import { LineChartComponent, LinePoint } from '../../shared/components/line-chart.component';
 import { ReportDonutComponent, DonutSegment } from '../../shared/components/report-donut.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
-import { loadViewSetting, persistQueryParams, saveViewSetting } from '../../core/view-state';
+import { persistQueryParams } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DateRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
@@ -54,17 +51,31 @@ type DetailRow =
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, LineChartComponent, DateRangePickerComponent, ReportDonutComponent, LucideChevronLeft, LucideChevronRight],
+  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, DateRangePickerComponent, ReportDonutComponent, LucideChevronLeft, LucideChevronRight],
   template: `
     <div class="page">
-      <div class="page-header"><h1>Reports</h1></div>
+      <!-- Top bar: view toggle + export + date range -->
+      <div class="page-header">
+        <div class="rpt-tabs">
+          <button class="rpt-tab" [class.active]="view() === 'uebersicht'" (click)="view.set('uebersicht')">Übersicht</button>
+          <button class="rpt-tab" [class.active]="view() === 'detailliert'" (click)="view.set('detailliert')">Detailliert</button>
+        </div>
+        <div class="page-controls">
+          <div class="export-wrap">
+            <button class="btn btn-sm" (click)="exportOpen.update(v => !v)" type="button">Export ▾</button>
+            @if (exportOpen()) {
+              <div class="export-menu">
+                <a class="export-item" [href]="csvUrl()" (click)="exportOpen.set(false)">CSV herunterladen</a>
+                <a class="export-item" [href]="xlsxUrl()" (click)="exportOpen.set(false)">XLSX herunterladen</a>
+              </div>
+            }
+          </div>
+          <app-date-range-picker [range]="range()" (rangeChange)="patch($event)" align="end" />
+        </div>
+      </div>
 
       <!-- Filter bar -->
       <div class="card card-pad filter-bar">
-        <div class="field field-range">
-          <label>Zeitraum</label>
-          <app-date-range-picker size="md" [range]="range()" (rangeChange)="patch($event)" />
-        </div>
         <div class="field">
           <label>Kunde</label>
           <select class="select" [ngModel]="f().clientId" (ngModelChange)="patch({ clientId: $event })">
@@ -114,21 +125,11 @@ type DetailRow =
         <label class="switch" style="align-self: flex-end; height: 38px;">
           <input type="checkbox" [ngModel]="f().rounded === true" (ngModelChange)="patch({ rounded: $event })" /> Gerundet
         </label>
-        <div class="row" style="align-self: flex-end; margin-left: auto;">
-          <select class="select btn-sm" style="width: auto; max-width: 160px;"
-                  [ngModel]="activeView()" (ngModelChange)="applyView($event)"
-                  title="Gespeicherte Ansicht laden">
-            <option value="">Ansicht…</option>
-            @for (v of savedViews(); track v.name) { <option [value]="v.name">{{ v.name }}</option> }
-          </select>
-          <button class="btn btn-sm" (click)="saveView()" title="Aktuelle Filter als Ansicht speichern">＋</button>
-          @if (activeView()) {
-            <button class="btn btn-sm btn-ghost" (click)="deleteView()" title="Ansicht löschen">🗑</button>
-          }
-          <a class="btn btn-sm" [href]="csvUrl()">CSV</a>
-          <a class="btn btn-sm" [href]="xlsxUrl()">XLSX</a>
-        </div>
+
       </div>
+
+      <!-- ─── Übersicht ─── -->
+      @if (view() === 'uebersicht') {
 
       <!-- Summary cards -->
       @if (summary(); as s) {
@@ -141,23 +142,36 @@ type DetailRow =
 
         <!-- Clockify-style overview: daily bars + project table + donut -->
         <div class="card mt-4 ov-card">
-          <!-- Daily bar chart -->
-          @if (dailyTrend(); as dt) {
+          <!-- Daily bar chart (stacked by project) -->
+          @if (dailyBreakdown(); as db) {
             <div class="ov-bars-wrap card-pad" style="border-bottom: 1px solid var(--border)">
               <div class="ov-bars">
-                @for (pt of dt.data; track pt.period) {
-                  <div class="ov-bar-col" [class.ov-bar-col-zero]="pt.durationSeconds === 0">
-                    <div class="ov-bar-label-top">
-                      @if (pt.durationSeconds > 0) { {{ pt.durationSeconds | duration: 'HH:MM' }} }
-                      @else { <span class="faint">—</span> }
-                    </div>
-                    <div class="ov-bar-track">
-                      <div class="ov-bar-fill"
-                           [style.height.%]="dailyBarPct(pt.durationSeconds, dt)"
-                           [style.background]="dailyBarColor()">
+                @for (day of db.days; track day.date) {
+                  <div class="ov-bar-col" [class.ov-bar-col-zero]="day.totalSeconds === 0">
+                    @if (db.days.length <= 14) {
+                      <div class="ov-bar-label-top">
+                        @if (day.totalSeconds > 0) { {{ day.totalSeconds | duration: 'HH:MM' }} }
+                        @else { <span class="faint">—</span> }
                       </div>
+                    } @else {
+                      <div class="ov-bar-label-top"></div>
+                    }
+                    <div class="ov-bar-track">
+                      <!-- Stacked segments, bottom to top = projects ordered by seconds desc -->
+                      @if (day.totalSeconds > 0) {
+                        <div class="ov-bar-stack"
+                             [style.height.%]="dayBarPct(day.totalSeconds, db)"
+                             [title]="barTooltip(day)">
+                          @for (seg of day.projects; track seg.projectId) {
+                            <div class="ov-bar-segment"
+                                 [style.flex]="seg.durationSeconds"
+                                 [style.background]="segColor(seg)">
+                            </div>
+                          }
+                        </div>
+                      }
                     </div>
-                    <div class="ov-bar-label-bottom">{{ dayLabel(pt.period) }}</div>
+                    <div class="ov-bar-label-bottom">{{ dayLabel(day.date, db.days.length) }}</div>
                   </div>
                 }
               </div>
@@ -216,16 +230,10 @@ type DetailRow =
         </div>
       }
 
-      <!-- Trend -->
-      <div class="card card-pad mt-4">
-        <div class="row-between">
-          <div class="card-title" style="margin: 0">Trend</div>
-          <select class="select btn-sm" [ngModel]="granularity()" (ngModelChange)="granularity.set($event); loadTrend()" style="width: auto;">
-            <option value="DAY">Täglich</option><option value="WEEK">Wöchentlich</option><option value="MONTH">Monatlich</option>
-          </select>
-        </div>
-        @if (trend(); as t) { <app-line-chart [points]="trendPoints(t)" /> }
-      </div>
+      } <!-- end Übersicht -->
+
+      <!-- ─── Detailliert ─── -->
+      @if (view() === 'detailliert') {
 
       <!-- Heatmap -->
       <div class="card card-pad mt-4">
@@ -371,9 +379,21 @@ type DetailRow =
           }
         }
       </div>
+
+      } <!-- end Detailliert -->
     </div>
   `,
   styles: [`
+    /* ── Top bar ── */
+    .rpt-tabs { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; gap: 2px; }
+    .rpt-tab { padding: 6px 18px; border-radius: calc(var(--radius) - 2px); border: none; background: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted); transition: background 150ms, color 150ms; white-space: nowrap; }
+    .rpt-tab.active { background: var(--brand); color: #fff; }
+    .rpt-tab:hover:not(.active) { background: var(--hover); color: var(--text); }
+    .export-wrap { position: relative; }
+    .export-menu { position: absolute; right: 0; top: calc(100% + 4px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); z-index: 20; min-width: 180px; overflow: hidden; }
+    .export-item { display: block; padding: 10px 16px; font-size: var(--fs-sm); color: var(--text); white-space: nowrap; text-decoration: none; }
+    .export-item:hover { background: var(--hover); }
+    /* ── Filter bar ── */
     .filter-bar { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; position: sticky; top: 0; z-index: 5; }
     .filter-bar .field { margin: 0; min-width: 120px; }
     @media (max-width: 640px) {
@@ -400,11 +420,11 @@ type DetailRow =
     .ov-card { overflow: visible; }
     .ov-bars-wrap { padding-bottom: var(--sp-4); }
     .ov-bars { display: flex; gap: 0; align-items: flex-end; height: 220px; overflow-x: auto; }
-    .ov-bar-col { flex: 1; min-width: 60px; display: flex; flex-direction: column; align-items: center; height: 100%; }
+    .ov-bar-col { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; }
     .ov-bar-label-top { font-size: var(--fs-xs); font-weight: 600; margin-bottom: 4px; text-align: center; height: 18px; line-height: 18px; white-space: nowrap; }
-    .ov-bar-track { flex: 1; width: 60%; display: flex; align-items: flex-end; }
-    .ov-bar-fill { width: 100%; border-radius: var(--radius-sm) var(--radius-sm) 0 0; transition: height 0.3s; min-height: 2px; }
-    .ov-bar-col-zero .ov-bar-fill { min-height: 0; background: transparent !important; }
+    .ov-bar-track { flex: 1; width: 64%; display: flex; align-items: flex-end; }
+    .ov-bar-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: var(--radius-sm) var(--radius-sm) 0 0; overflow: hidden; transition: height 0.3s; min-height: 2px; }
+    .ov-bar-segment { width: 100%; min-height: 2px; transition: flex 0.3s; }
     .ov-bar-label-bottom { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 6px; text-align: center; white-space: nowrap; }
     .ov-bottom { display: flex; gap: 0; align-items: flex-start; border-top: none; }
     .ov-table { flex: 1; min-width: 0; overflow-x: auto; }
@@ -431,7 +451,8 @@ export class ReportsComponent {
   private readonly tagApi = inject(TagApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly dialog = inject(DialogService);
+  protected readonly view = signal<'uebersicht' | 'detailliert'>('uebersicht');
+  protected readonly exportOpen = signal(false);
 
   protected readonly groupOptions = GROUP_OPTIONS;
   protected readonly projects = signal<Project[]>([]);
@@ -439,10 +460,8 @@ export class ReportsComponent {
   protected readonly tasks = signal<Task[]>([]);
   protected readonly tags = signal<Tag[]>([]);
   protected readonly summary = signal<SummaryReport | null>(null);
-  protected readonly trend = signal<TrendReport | null>(null);
   protected readonly budget = signal<BudgetReportRow[]>([]);
   protected readonly detailed = signal<PageResponse<TimeEntry> | null>(null);
-  protected readonly granularity = signal<Granularity>(loadViewSetting<Granularity>('reports.granularity', 'DAY'));
   protected readonly page = signal(0);
 
   protected readonly detailedRows = computed<DetailRow[]>(() => {
@@ -502,7 +521,7 @@ export class ReportsComponent {
     }
     return rows;
   });
-  protected readonly dailyTrend = signal<TrendReport | null>(null);
+  protected readonly dailyBreakdown = signal<DailyBreakdown | null>(null);
   protected readonly attendance = signal<AttendanceReport | null>(null);
   protected readonly heatmap = signal<HeatmapReport | null>(null);
   protected readonly heatmapYear = signal(new Date().getFullYear());
@@ -570,10 +589,13 @@ export class ReportsComponent {
       this.taskApi.getForProject(projectId).subscribe((t) => this.tasks.set(t));
     });
     // React to filter changes.
+    // untracked() prevents loadAll/loadDetailed from registering this.page()
+    // as an effect dependency — otherwise nextPage() would re-trigger the effect
+    // and reset page back to 0.
     effect(() => {
       const filter = this.f();
       this.page.set(0);
-      this.loadAll(filter);
+      untracked(() => this.loadAll(filter));
     });
   }
 
@@ -616,16 +638,8 @@ export class ReportsComponent {
     this.reportApi.summary(filter).subscribe((s) => this.summary.set(s));
     this.reportApi.budget(filter).subscribe((b) => this.budget.set(b));
     this.reportApi.attendance(filter.from, filter.to).subscribe((a) => this.attendance.set(a));
-    this.reportApi.trends({ ...filter, granularity: 'DAY' }).subscribe((t) => this.dailyTrend.set(t));
-    this.loadTrend();
+    this.reportApi.dailyBreakdown(filter).subscribe((b) => this.dailyBreakdown.set(b));
     this.loadDetailed(filter);
-  }
-
-  loadTrend(): void {
-    saveViewSetting('reports.granularity', this.granularity());
-    this.reportApi
-      .trends({ ...this.f(), granularity: this.granularity() })
-      .subscribe((t) => this.trend.set(t));
   }
 
   private loadDetailed(filter: ReportFilter): void {
@@ -634,30 +648,12 @@ export class ReportsComponent {
       .subscribe((d) => this.detailed.set(d));
   }
 
-  groupBars(s: SummaryReport): BarDatum[] {
-    return s.groups.map((g) => ({
-      label: g.label,
-      value: g.durationSeconds,
-      display: new DurationPipe().transform(g.durationSeconds, 'HH:MM'),
-      key: g.key,
-    }));
-  }
-
-  revenueBars(s: SummaryReport): BarDatum[] {
-    return s.groups.map((g) => ({
-      label: g.label,
-      value: Number(g.revenueAmount),
-      display: new MoneyPipe().transform(g.revenueAmount, s.currencyCode),
-      key: g.key,
-    }));
-  }
-
   drillable(s: SummaryReport): boolean {
     return ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'].includes(s.groupedBy);
   }
 
   /** Click on a chart bar narrows the report filter to that group. */
-  drillDown(s: SummaryReport, d: BarDatum): void {
+  drillDown(s: SummaryReport, d: { label: string; value: number; key?: string }): void {
     if (!d.key) return;
     switch (s.groupedBy) {
       case 'PROJECT':
@@ -717,33 +713,36 @@ export class ReportsComponent {
     return this.clients().find((c) => c.id === proj.clientId)?.name ?? null;
   }
 
-  dailyBarPct(seconds: number, trend: TrendReport): number {
-    const max = Math.max(...trend.data.map((p) => p.durationSeconds), 1);
-    return (seconds / max) * 100;
+  dayBarPct(totalSeconds: number, db: DailyBreakdown): number {
+    const max = Math.max(...db.days.map((d) => d.totalSeconds), 1);
+    return (totalSeconds / max) * 100;
   }
 
-  dailyBarColor(): string {
-    const f = this.f();
-    if (f.groupBy === 'PROJECT' && f.projectId) {
-      const proj = this.projects().find((p) => p.id === f.projectId);
-      if (proj?.color) return proj.color;
-    }
-    return 'var(--brand)';
+  segColor(seg: DailyBreakdownDay['projects'][number]): string {
+    if (seg.projectColor) return seg.projectColor;
+    // Fallback: use palette position based on project order in summary groups
+    const idx = (this.summary()?.groups ?? []).findIndex((g) => g.key === seg.projectId);
+    return CHART_PALETTE[Math.max(0, idx) % CHART_PALETTE.length];
   }
 
-  dayLabel(period: string): string {
-    // period is YYYY-MM-DD for daily granularity
+  barTooltip(day: DailyBreakdownDay): string {
+    return day.projects.map((s) => `${s.projectName}: ${new DurationPipe().transform(s.durationSeconds, 'HH:MM')}`).join('\n');
+  }
+
+  dayLabel(period: string, totalDays = 7): string {
     if (!period || !period.includes('-')) return period;
     try {
       const d = new Date(period + 'T12:00:00');
+      if (totalDays > 14) {
+        // Only day number; mark Mondays with a dot prefix so weeks stay readable
+        const day = d.getDate();
+        const dow = (d.getDay() + 6) % 7; // 0=Mon
+        return dow === 0 ? `·${day}` : String(day);
+      }
       return d.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' });
     } catch {
       return period;
     }
-  }
-
-  trendPoints(t: TrendReport): LinePoint[] {
-    return t.data.map((d) => ({ label: d.period, value: d.durationSeconds }));
   }
 
   time(instant: string): string {
@@ -759,53 +758,6 @@ export class ReportsComponent {
     return Math.min(a, b);
   }
 
-  // --- Saved report views (localStorage — single-user app, no backend needed) ---
-
-  private static readonly VIEWS_KEY = 'dash.reportViews';
-  protected readonly savedViews = signal<Array<{ name: string; filter: ReportFilter }>>(this.readViews());
-  protected readonly activeView = signal('');
-
-  private readViews(): Array<{ name: string; filter: ReportFilter }> {
-    try {
-      return JSON.parse(localStorage.getItem(ReportsComponent.VIEWS_KEY) ?? '[]');
-    } catch {
-      return [];
-    }
-  }
-
-  private writeViews(views: Array<{ name: string; filter: ReportFilter }>): void {
-    localStorage.setItem(ReportsComponent.VIEWS_KEY, JSON.stringify(views));
-    this.savedViews.set(views);
-  }
-
-  saveView(): void {
-    this.dialog
-      .prompt({ title: 'Ansicht speichern', label: 'Name der Ansicht', confirmLabel: 'Speichern' })
-      .then((name) => {
-        if (!name?.trim()) return;
-        const trimmed = name.trim();
-        const views = this.savedViews().filter((v) => v.name !== trimmed);
-        views.push({ name: trimmed, filter: this.f() });
-        this.writeViews(views);
-        this.activeView.set(trimmed);
-      });
-  }
-
-  applyView(name: string): void {
-    this.activeView.set(name);
-    const view = this.savedViews().find((v) => v.name === name);
-    if (!view) return;
-    this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: view.filter as Record<string, unknown>,
-    });
-  }
-
-  deleteView(): void {
-    const name = this.activeView();
-    this.writeViews(this.savedViews().filter((v) => v.name !== name));
-    this.activeView.set('');
-  }
 
   csvUrl(): string {
     return this.reportApi.exportUrl('csv', this.f());
