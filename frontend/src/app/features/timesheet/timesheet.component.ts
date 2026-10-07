@@ -10,6 +10,7 @@ import { TimesheetApiService } from '../../core/api/timesheet-api.service';
 import { Project, Task, WeeklyReport } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { persistQueryParams } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
@@ -223,6 +224,7 @@ export class TimesheetComponent {
   });
 
   constructor() {
+    persistQueryParams('timesheet');
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     effect(() => {
       const projectId = this.newProjectId();

@@ -31,6 +31,7 @@ import { BarChartComponent, BarDatum } from '../../shared/components/bar-chart.c
 import { LineChartComponent, LinePoint } from '../../shared/components/line-chart.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
+import { loadViewSetting, persistQueryParams, saveViewSetting } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DateRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
@@ -344,7 +345,7 @@ export class ReportsComponent {
   protected readonly trend = signal<TrendReport | null>(null);
   protected readonly budget = signal<BudgetReportRow[]>([]);
   protected readonly detailed = signal<PageResponse<TimeEntry> | null>(null);
-  protected readonly granularity = signal<Granularity>('DAY');
+  protected readonly granularity = signal<Granularity>(loadViewSetting<Granularity>('reports.granularity', 'DAY'));
   protected readonly page = signal(0);
 
   protected readonly detailedRows = computed<DetailRow[]>(() => {
@@ -456,6 +457,7 @@ export class ReportsComponent {
   });
 
   constructor() {
+    persistQueryParams('reports');
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.clientApi.getAll().subscribe((c) => this.clients.set(c));
     this.tagApi.getAll().subscribe((t) => this.tags.set(t));
@@ -521,6 +523,7 @@ export class ReportsComponent {
   }
 
   loadTrend(): void {
+    saveViewSetting('reports.granularity', this.granularity());
     this.reportApi
       .trends({ ...this.f(), granularity: this.granularity() })
       .subscribe((t) => this.trend.set(t));

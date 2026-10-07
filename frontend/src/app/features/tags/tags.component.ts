@@ -4,6 +4,7 @@ import { TagApiService } from '../../core/api/tag-api.service';
 import { Tag, TagInput } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { loadViewSetting, saveViewSetting } from '../../core/view-state';
 import { LucidePlus } from '@lucide/angular';
 
 @Component({
@@ -55,7 +56,7 @@ export class TagsComponent {
 
   protected readonly tags = signal<Tag[]>([]);
   protected readonly loading = signal(true);
-  protected showArchived = false;
+  protected showArchived = loadViewSetting('tags.showArchived', false);
   protected newName = '';
   protected newColor = '#6366f1';
 
@@ -65,6 +66,7 @@ export class TagsComponent {
 
   load(): void {
     this.loading.set(true);
+    saveViewSetting('tags.showArchived', this.showArchived);
     this.api.getAll(this.showArchived).subscribe({
       next: (t) => {
         this.tags.set(t);

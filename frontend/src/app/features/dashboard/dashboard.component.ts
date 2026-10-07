@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { DashboardApiService } from '../../core/api/dashboard-api.service';
 import { Dashboard } from '../../core/models';
+import { persistQueryParams } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DonutGaugeComponent } from '../../shared/components/donut-gauge.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
@@ -186,6 +187,7 @@ export class DashboardComponent {
   );
 
   constructor() {
+    persistQueryParams('dashboard');
     effect((onCleanup) => {
       const range = this.range();
       this.loading.set(true);

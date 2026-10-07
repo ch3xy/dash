@@ -5,6 +5,7 @@ import { ClientApiService } from '../../core/api/client-api.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { Client, Project, ProjectInput, ProjectStatus } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
+import { loadViewSetting, saveViewSetting } from '../../core/view-state';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { LucidePlus, LucideX } from '@lucide/angular';
@@ -119,7 +120,7 @@ export class ProjectsComponent {
   protected readonly loading = signal(true);
   protected readonly editing = signal(false);
   protected editingId: string | null = null;
-  protected statusFilter: ProjectStatus | undefined = undefined;
+  protected statusFilter: ProjectStatus | undefined = loadViewSetting<ProjectStatus | null>('projects.status', null) ?? undefined;
   protected budgetHours: number | null = null;
   protected form: ProjectInput = this.empty();
 
@@ -142,6 +143,7 @@ export class ProjectsComponent {
 
   load(): void {
     this.loading.set(true);
+    saveViewSetting('projects.status', this.statusFilter ?? null);
     this.api.getAll({ status: this.statusFilter }).subscribe({
       next: (p) => {
         this.projects.set(p);

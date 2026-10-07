@@ -122,10 +122,9 @@ a:hover {
 }
 
 /* ---- Layout ---- */
+/* Pages use the full content width (incl. collapsed sidebar). */
 .page {
   padding: var(--sp-5);
-  max-width: 1440px;
-  margin: 0 auto;
 }
 .page-header {
   display: flex;

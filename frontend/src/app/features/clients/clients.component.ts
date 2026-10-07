@@ -4,6 +4,7 @@ import { ClientApiService } from '../../core/api/client-api.service';
 import { Client, ClientInput } from '../../core/models';
 import { DialogService } from '../../core/dialog.service';
 import { ToastService } from '../../core/toast.service';
+import { loadViewSetting, saveViewSetting } from '../../core/view-state';
 import { LucidePlus, LucideX } from '@lucide/angular';
 
 @Component({
@@ -100,7 +101,7 @@ export class ClientsComponent {
   protected readonly clients = signal<Client[]>([]);
   protected readonly loading = signal(true);
   protected readonly editing = signal<Client | { id: null } | null>(null);
-  protected showArchived = false;
+  protected showArchived = loadViewSetting('clients.showArchived', false);
   protected form: ClientInput = { name: '', currencyCode: 'EUR' };
 
   constructor() {
@@ -109,6 +110,7 @@ export class ClientsComponent {
 
   load(): void {
     this.loading.set(true);
+    saveViewSetting('clients.showArchived', this.showArchived);
     this.api.getAll(this.showArchived).subscribe({
       next: (c) => {
         this.clients.set(c);
