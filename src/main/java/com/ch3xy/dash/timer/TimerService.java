@@ -71,6 +71,7 @@ public class TimerService {
     public TimerResponse start(TimerStartRequest req) {
         requireNoRunningTimer();
         Project project = requireProject(req.projectId());
+        project.requireNotArchived();
         Task task = resolveTask(req.taskId(), project);
 
         RunningTimer timer = new RunningTimer();
@@ -124,7 +125,9 @@ public class TimerService {
     public TimerResponse update(TimerUpdateRequest req) {
         RunningTimer timer = currentOrThrow();
         if (req.projectId() != null) {
-            timer.setProject(requireProject(req.projectId()));
+            Project project = requireProject(req.projectId());
+            project.requireNotArchived();
+            timer.setProject(project);
         }
         if (req.taskId() != null) {
             timer.setTask(resolveTask(req.taskId(), timer.getProject()));

@@ -33,7 +33,7 @@ public class Project {
     @UpdateTimestamp Instant updatedAt;
 }
 
-public enum ProjectStatus { ACTIVE, PAUSED, COMPLETED, ARCHIVED }
+public enum ProjectStatus { ACTIVE, ARCHIVED }  // ARCHIVED: keine neuen Einträge/Timer, in Reports sichtbar
 public enum BudgetReset { NONE, MONTHLY, YEARLY }
 ```
 

@@ -31,7 +31,7 @@ frontend/src/app/
 │   │   ├── project-select/            ← Autocomplete
 │   │   ├── tag-select/                ← Multi-Select
 │   │   ├── budget-progress/           ← Progress Bar mit Farbcodierung
-│   │   ├── status-badge/              ← ACTIVE/PAUSED/etc.
+│   │   ├── status-badge/              ← ACTIVE/ARCHIVED
 │   │   └── confirm-dialog/
 │   ├── pipes/
 │   │   ├── duration.pipe.ts           ← Sekunden → HH:MM:SS

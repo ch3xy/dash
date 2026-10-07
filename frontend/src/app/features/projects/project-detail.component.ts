@@ -7,6 +7,7 @@ import { ReportApiService } from '../../core/api/report-api.service';
 import { TaskApiService } from '../../core/api/task-api.service';
 import {
   BudgetStatus,
+  PROJECT_STATUS_LABELS,
   Project,
   ProjectRate,
   ProjectStatus,
@@ -36,7 +37,7 @@ type Tab = 'tasks' | 'rates';
             <div class="muted">{{ p.clientName || 'Kein Kunde' }}</div>
           </div>
           <select class="select" [ngModel]="p.status" (ngModelChange)="changeStatus($event)">
-            @for (s of statuses; track s) { <option [ngValue]="s">{{ s }}</option> }
+            @for (s of statuses; track s) { <option [ngValue]="s">{{ statusLabels[s] }}</option> }
           </select>
         </div>
 
@@ -164,7 +165,8 @@ export class ProjectDetailComponent {
   private readonly reportApi = inject(ReportApiService);
   private readonly toast = inject(ToastService);
 
-  protected readonly statuses: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
+  protected readonly statuses: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'];
+  protected readonly statusLabels = PROJECT_STATUS_LABELS;
   protected readonly project = signal<Project | null>(null);
   protected readonly budget = signal<BudgetStatus | null>(null);
   protected readonly tasks = signal<Task[]>([]);

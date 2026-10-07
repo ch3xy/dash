@@ -28,7 +28,7 @@ create table projects (
   name                 text          not null,
   description          text,
   color                text,
-  status               text          not null,          -- ACTIVE|PAUSED|COMPLETED|ARCHIVED
+  status               text          not null,          -- ACTIVE|ARCHIVED
   billable_by_default  boolean       not null default true,
   default_hourly_rate  numeric(12,2),
   currency_code        varchar(3)    not null,
@@ -156,7 +156,7 @@ alter table time_entries
   add constraint chk_source_valid           check (source in ('TIMER','MANUAL','IMPORT','ADJUSTMENT'));
 
 alter table projects
-  add constraint chk_status_valid           check (status in ('ACTIVE','PAUSED','COMPLETED','ARCHIVED')),
+  add constraint chk_status_valid           check (status in ('ACTIVE','ARCHIVED')),   -- seit V5
   add constraint chk_budget_reset_valid     check (budget_reset in ('NONE','MONTHLY','YEARLY'));
 ```
 

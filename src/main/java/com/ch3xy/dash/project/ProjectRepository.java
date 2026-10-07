@@ -12,6 +12,8 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
     List<Project> findAllByOrderByNameAsc();
 
+    List<Project> findAllByStatusOrderByNameAsc(ProjectStatus status);
+
     List<Project> findAllByClientIdAndStatusNotOrderByNameAsc(UUID clientId, ProjectStatus status);
 
     @Query("SELECT COUNT(p) > 0 FROM Project p WHERE lower(p.name) = lower(:name) AND p.client.id = :clientId AND p.id <> :excludeId")

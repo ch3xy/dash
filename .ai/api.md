@@ -101,7 +101,7 @@ Response `200`: Liste von:
   "name": "string",
   "description": "string|null",
   "color": "#hex|null",
-  "status": "ACTIVE|PAUSED|COMPLETED|ARCHIVED",
+  "status": "ACTIVE|ARCHIVED",
   "billableByDefault": true,
   "defaultHourlyRate": "0.00",
   "currencyCode": "EUR",
@@ -137,7 +137,7 @@ Body:
 
 ### `PATCH /projects/{id}/status` → `200`
 
-Body: `{ "status": "PAUSED" }`
+Body: `{ "status": "ARCHIVED" }`
 
 ### `GET /projects/{id}/budget-status` → `200`
 

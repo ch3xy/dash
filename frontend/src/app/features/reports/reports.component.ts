@@ -575,8 +575,9 @@ export class ReportsComponent {
 
   constructor() {
     persistQueryParams('reports');
-    this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
-    this.clientApi.getAll().subscribe((c) => this.clients.set(c));
+    // Archived projects/clients stay filterable: their past time still belongs in reports.
+    this.projectApi.getAll({ archived: true }).subscribe((p) => this.projects.set(p));
+    this.clientApi.getAll(true).subscribe((c) => this.clients.set(c));
     this.tagApi.getAll().subscribe((t) => this.tags.set(t));
     this.loadHeatmap();
     // Task options depend on the selected project.

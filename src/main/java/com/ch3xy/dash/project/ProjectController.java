@@ -27,13 +27,15 @@ public class ProjectController {
 
     @Operation(
             summary = "Alle Projekte abrufen",
-            description = "Gibt eine Liste aller Projekte zurück. Standardmäßig werden nur aktive Projekte geliefert. Mit archived=true werden alle Projekte unabhängig vom Status eingeschlossen."
+            description = "Gibt eine Liste aller Projekte zurück. Standardmäßig werden nur aktive Projekte geliefert. Mit archived=true werden alle Projekte unabhängig vom Status eingeschlossen; mit status nur Projekte genau dieses Status."
     )
     @GetMapping
     public ResponseEntity<List<ProjectResponse>> getAll(
             @Parameter(description = "Wenn true, werden archivierte Projekte in die Antwort eingeschlossen.")
-            @RequestParam(defaultValue = "false") boolean archived) {
-        return ResponseEntity.ok(service.findAll(archived));
+            @RequestParam(defaultValue = "false") boolean archived,
+            @Parameter(description = "Nur Projekte mit diesem Status; hat Vorrang vor archived.")
+            @RequestParam(required = false) ProjectStatus status) {
+        return ResponseEntity.ok(status != null ? service.findByStatus(status) : service.findAll(archived));
     }
 
     @Operation(
@@ -85,7 +87,7 @@ public class ProjectController {
 
     @Operation(
             summary = "Projektstatus ändern",
-            description = "Setzt den Status des Projekts (ACTIVE, PAUSED, COMPLETED, ARCHIVED). Archivierte Projekte erscheinen nicht mehr in Auswahlfeldern."
+            description = "Setzt den Status des Projekts (ACTIVE, ARCHIVED). Archivierte Projekte erscheinen nicht mehr in Auswahlfeldern und nehmen keine neuen Zeiteinträge oder Timer an; in Reports bleiben sie sichtbar."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status aktualisiert"),

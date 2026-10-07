@@ -43,6 +43,11 @@ public class ProjectService {
         return projects.stream().map(ProjectResponse::from).toList();
     }
 
+    public List<ProjectResponse> findByStatus(ProjectStatus status) {
+        return projectRepository.findAllByStatusOrderByNameAsc(status).stream()
+                .map(ProjectResponse::from).toList();
+    }
+
     public ProjectResponse findById(UUID id) {
         return ProjectResponse.from(require(id));
     }

@@ -91,6 +91,28 @@ class TimerServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void startingTimerOnArchivedProjectIsRejected() {
+        projectService.updateStatus(project.id(), com.ch3xy.dash.project.ProjectStatus.ARCHIVED);
+
+        assertThatThrownBy(() ->
+                timerService.start(new TimerStartRequest(project.id(), null, "x", true, Set.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("archiviert");
+        assertThat(timerRepository.count()).isZero();
+    }
+
+    @Test
+    void timerStartedBeforeArchivingCanStillBeStopped() {
+        timerService.start(new TimerStartRequest(project.id(), null, "work", true, Set.of()));
+        projectService.updateStatus(project.id(), com.ch3xy.dash.project.ProjectStatus.ARCHIVED);
+        CLOCK.set(Instant.parse("2026-06-19T10:00:00Z"));
+
+        TimeEntryResponse entry = timerService.stop(new TimerStopRequest(null));
+
+        assertThat(entry.durationSeconds()).isEqualTo(3600);
+    }
+
+    @Test
     void discardRemovesTimerWithoutCreatingEntry() {
         timerService.start(new TimerStartRequest(project.id(), null, "throwaway", true, Set.of()));
         timerService.discard();

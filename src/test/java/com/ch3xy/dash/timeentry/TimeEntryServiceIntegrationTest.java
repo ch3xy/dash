@@ -146,6 +146,35 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void manualEntryOnArchivedProjectIsRejectedButExistingEntriesStayEditable() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse existing = service.create(new TimeEntryRequest(
+                project.id(), null, "before", START, END, true, Set.of()));
+        projectService.updateStatus(project.id(), com.ch3xy.dash.project.ProjectStatus.ARCHIVED);
+
+        assertThatThrownBy(() -> service.create(new TimeEntryRequest(
+                project.id(), null, "after", START, END, true, Set.of())))
+                .isInstanceOf(IllegalStateException.class);
+
+        TimeEntryResponse edited = service.update(existing.id(), new TimeEntryRequest(
+                project.id(), null, "renamed", START, END, true, Set.of()));
+        assertThat(edited.description()).isEqualTo("renamed");
+    }
+
+    @Test
+    void movingEntryOntoArchivedProjectIsRejected() {
+        ProjectResponse active = projectWithDefaultRate();
+        ProjectResponse archived = projectWithDefaultRate();
+        projectService.updateStatus(archived.id(), com.ch3xy.dash.project.ProjectStatus.ARCHIVED);
+        TimeEntryResponse entry = service.create(new TimeEntryRequest(
+                active.id(), null, "x", START, END, true, Set.of()));
+
+        assertThatThrownBy(() -> service.update(entry.id(), new TimeEntryRequest(
+                archived.id(), null, "x", START, END, true, Set.of())))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void deleteByCriteriaRemovesOnlyMatchingEntries() {
         ProjectResponse target = projectWithDefaultRate();
         ProjectResponse other = projectWithDefaultRate();

@@ -5,7 +5,12 @@ export type Uuid = string;
 export type IsoDate = string; // YYYY-MM-DD
 export type IsoInstant = string; // RFC 3339
 
-export type ProjectStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ARCHIVED';
+export type ProjectStatus = 'ACTIVE' | 'ARCHIVED';
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  ACTIVE: 'Aktiv',
+  ARCHIVED: 'Archiviert',
+};
 export type BudgetReset = 'NONE' | 'MONTHLY' | 'YEARLY';
 export type TimeEntrySource = 'TIMER' | 'MANUAL' | 'IMPORT' | 'ADJUSTMENT';
 export type BudgetStatusKind = 'ON_TRACK' | 'WARNING' | 'EXCEEDED';

@@ -81,6 +81,15 @@ public class Project {
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }
     public ProjectStatus getStatus() { return status; }
+
+    public boolean isArchived() { return status == ProjectStatus.ARCHIVED; }
+
+    /** Archived projects stay visible in reports but accept no new time. */
+    public void requireNotArchived() {
+        if (isArchived()) {
+            throw new IllegalStateException("Projekt „" + name + "“ ist archiviert – neue Zeiteinträge sind nicht möglich");
+        }
+    }
     public void setStatus(ProjectStatus status) { this.status = status; }
     public boolean isBillableByDefault() { return billableByDefault; }
     public void setBillableByDefault(boolean billableByDefault) { this.billableByDefault = billableByDefault; }

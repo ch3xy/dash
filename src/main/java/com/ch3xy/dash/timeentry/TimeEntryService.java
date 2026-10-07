@@ -111,11 +111,18 @@ public class TimeEntryService {
         return create(req, TimeEntrySource.MANUAL);
     }
 
+    /**
+     * Manual and copied entries are rejected on archived projects. TIMER (stopping a
+     * timer started before archiving), IMPORT and ADJUSTMENT (split) stay allowed.
+     */
     @Transactional
     public TimeEntryResponse create(TimeEntryRequest req, TimeEntrySource source) {
         TimeEntry entry = new TimeEntry();
         entry.setSource(source);
         apply(entry, req);
+        if (source == TimeEntrySource.MANUAL) {
+            entry.getProject().requireNotArchived();
+        }
         return TimeEntryResponse.from(repository.save(entry));
     }
 
@@ -135,7 +142,12 @@ public class TimeEntryService {
     @Transactional
     public TimeEntryResponse update(UUID id, TimeEntryRequest req) {
         TimeEntry entry = require(id);
+        UUID previousProjectId = entry.getProject().getId();
         apply(entry, req);
+        // Editing an entry of an archived project is fine; moving time onto one is not.
+        if (!entry.getProject().getId().equals(previousProjectId)) {
+            entry.getProject().requireNotArchived();
+        }
         return TimeEntryResponse.from(repository.save(entry));
     }
 

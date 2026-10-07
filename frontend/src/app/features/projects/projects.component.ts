@@ -3,14 +3,14 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ClientApiService } from '../../core/api/client-api.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
-import { Client, Project, ProjectInput, ProjectStatus } from '../../core/models';
+import { Client, PROJECT_STATUS_LABELS, Project, ProjectInput, ProjectStatus } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
 import { loadViewSetting, saveViewSetting } from '../../core/view-state';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { LucidePlus, LucideX } from '@lucide/angular';
 
-const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
+const STATUSES: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'];
 
 @Component({
   selector: 'app-projects',
@@ -23,7 +23,7 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
         <div class="row">
           <select class="select" [(ngModel)]="statusFilter" (ngModelChange)="load()">
             <option [ngValue]="undefined">Alle Status</option>
-            @for (s of statuses; track s) { <option [ngValue]="s">{{ s }}</option> }
+            @for (s of statuses; track s) { <option [ngValue]="s">{{ statusLabels[s] }}</option> }
           </select>
           <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Projekt</button>
         </div>
@@ -49,7 +49,7 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'];
                     </span>
                   </td>
                   <td>{{ p.clientName || '—' }}</td>
-                  <td><span class="badge" [class]="statusClass(p.status)">{{ p.status }}</span></td>
+                  <td><span class="badge" [class]="statusClass(p.status)">{{ statusLabels[p.status] }}</span></td>
                   <td>{{ p.hourBudgetMinutes ? (p.hourBudgetMinutes * 60 | duration: 'HH:MM') : '—' }}</td>
                   <td class="num mono">{{ p.defaultHourlyRate | money: p.currencyCode }}</td>
                   <td class="text-right"><button class="btn btn-ghost btn-sm" (click)="edit(p)">Bearbeiten</button></td>
@@ -115,12 +115,16 @@ export class ProjectsComponent {
   private readonly toast = inject(ToastService);
 
   protected readonly statuses = STATUSES;
+  protected readonly statusLabels = PROJECT_STATUS_LABELS;
   protected readonly projects = signal<Project[]>([]);
   protected readonly clients = signal<Client[]>([]);
   protected readonly loading = signal(true);
   protected readonly editing = signal(false);
   protected editingId: string | null = null;
-  protected statusFilter: ProjectStatus | undefined = loadViewSetting<ProjectStatus | null>('projects.status', null) ?? undefined;
+  // A persisted filter may still hold a removed status (PAUSED/COMPLETED); fall back to "all".
+  protected statusFilter: ProjectStatus | undefined = STATUSES.find(
+    (s) => s === loadViewSetting<string | null>('projects.status', null),
+  );
   protected budgetHours: number | null = null;
   protected form: ProjectInput = this.empty();
 
@@ -144,7 +148,7 @@ export class ProjectsComponent {
   load(): void {
     this.loading.set(true);
     saveViewSetting('projects.status', this.statusFilter ?? null);
-    this.api.getAll({ status: this.statusFilter }).subscribe({
+    this.api.getAll(this.statusFilter ? { status: this.statusFilter } : { archived: true }).subscribe({
       next: (p) => {
         this.projects.set(p);
         this.loading.set(false);
@@ -154,7 +158,7 @@ export class ProjectsComponent {
   }
 
   statusClass(s: ProjectStatus): string {
-    return s === 'ACTIVE' ? 'ok' : s === 'PAUSED' ? 'warn' : s === 'ARCHIVED' ? 'muted' : 'info';
+    return s === 'ACTIVE' ? 'ok' : 'muted';
   }
 
   openNew(): void {

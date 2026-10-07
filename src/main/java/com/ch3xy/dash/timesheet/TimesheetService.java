@@ -120,7 +120,8 @@ public class TimesheetService {
 
     /**
      * Copies every entry of the source week into the target week, shifted by whole
-     * weeks. Rates are resolved anew for the copied dates.
+     * weeks. Rates are resolved anew for the copied dates; entries of archived
+     * projects are skipped.
      */
     @Transactional
     public List<TimeEntryResponse> copyWeek(CopyWeekRequest req) {
@@ -132,6 +133,9 @@ public class TimesheetService {
         long days = ChronoUnit.DAYS.between(sourceStart, targetStart);
         List<TimeEntryRequest> copies = new ArrayList<>();
         for (TimeEntry e : entryRepository.findByEntryDateRange(sourceStart, sourceStart.plusDays(6))) {
+            if (e.getProject().isArchived()) {
+                continue; // no new time on archived projects
+            }
             copies.add(new TimeEntryRequest(
                     e.getProject().getId(), taskId(e), e.getDescription(),
                     shift(e.getStartTime(), days), shift(e.getEndTime(), days), e.isBillable(), tagIds(e)));
