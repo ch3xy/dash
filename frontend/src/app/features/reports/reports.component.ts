@@ -21,6 +21,7 @@ import {
   PageResponse,
   Project,
   ReportFilter,
+  SummaryGroup,
   SummaryReport,
   Tag,
   Task,
@@ -29,6 +30,7 @@ import {
 } from '../../core/models';
 import { BarChartComponent, BarDatum } from '../../shared/components/bar-chart.component';
 import { LineChartComponent, LinePoint } from '../../shared/components/line-chart.component';
+import { ReportDonutComponent, DonutSegment } from '../../shared/components/report-donut.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { loadViewSetting, persistQueryParams, saveViewSetting } from '../../core/view-state';
@@ -39,6 +41,11 @@ import { LucideChevronLeft, LucideChevronRight } from '@lucide/angular';
 
 const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'];
 
+const CHART_PALETTE = [
+  '#6366f1', '#f97316', '#22c55e', '#eab308', '#ec4899',
+  '#14b8a6', '#8b5cf6', '#ef4444', '#3b82f6', '#f59e0b',
+];
+
 type DetailRow =
   | { kind: 'header'; label: string }
   | { kind: 'entry'; entry: TimeEntry }
@@ -47,7 +54,7 @@ type DetailRow =
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent, DateRangePickerComponent, LucideChevronLeft, LucideChevronRight],
+  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent, DateRangePickerComponent, ReportDonutComponent, LucideChevronLeft, LucideChevronRight],
   template: `
     <div class="page">
       <div class="page-header"><h1>Reports</h1></div>
@@ -132,14 +139,79 @@ type DetailRow =
           <div class="card card-pad"><div class="card-title">Umsatz</div><div class="stat-value mono">{{ s.revenueAmount | money: s.currencyCode }}</div></div>
         </div>
 
-        <div class="grid grid-2col mt-4">
-          <div class="card card-pad">
-            <div class="card-title">Nach {{ s.groupedBy }} — Zeit</div>
-            <app-bar-chart [data]="groupBars(s)" [clickable]="drillable(s)" (barClick)="drillDown(s, $event)" />
-          </div>
-          <div class="card card-pad">
-            <div class="card-title">Nach {{ s.groupedBy }} — Umsatz</div>
-            <app-bar-chart [data]="revenueBars(s)" [clickable]="drillable(s)" (barClick)="drillDown(s, $event)" />
+        <!-- Clockify-style overview: daily bars + project table + donut -->
+        <div class="card mt-4 ov-card">
+          <!-- Daily bar chart -->
+          @if (dailyTrend(); as dt) {
+            <div class="ov-bars-wrap card-pad" style="border-bottom: 1px solid var(--border)">
+              <div class="ov-bars">
+                @for (pt of dt.data; track pt.period) {
+                  <div class="ov-bar-col" [class.ov-bar-col-zero]="pt.durationSeconds === 0">
+                    <div class="ov-bar-label-top">
+                      @if (pt.durationSeconds > 0) { {{ pt.durationSeconds | duration: 'HH:MM' }} }
+                      @else { <span class="faint">—</span> }
+                    </div>
+                    <div class="ov-bar-track">
+                      <div class="ov-bar-fill"
+                           [style.height.%]="dailyBarPct(pt.durationSeconds, dt)"
+                           [style.background]="dailyBarColor()">
+                      </div>
+                    </div>
+                    <div class="ov-bar-label-bottom">{{ dayLabel(pt.period) }}</div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+          <!-- Bottom: project table + donut -->
+          <div class="ov-bottom">
+            <div class="ov-table">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{{ s.groupedBy === 'PROJECT' ? 'Projekt' : s.groupedBy }}</th>
+                    <th class="num">Dauer</th>
+                    <th class="num">Umsatz</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (g of s.groups; track g.key; let i = $index) {
+                    <tr class="ov-group-row"
+                        [class.clickable]="drillable(s)"
+                        (click)="drillable(s) && drillDown(s, { label: g.label, value: g.durationSeconds, key: g.key })">
+                      <td class="faint">{{ i + 1 }}</td>
+                      <td>
+                        <span class="ov-dot" [style.background]="groupColor(g, i)"></span>
+                        <span>{{ g.label }}</span>
+                        @if (groupClientName(g)) {
+                          <span class="faint"> – {{ groupClientName(g) }}</span>
+                        }
+                      </td>
+                      <td class="num mono">{{ g.durationSeconds | duration: 'HH:MM' }}</td>
+                      <td class="num mono faint">{{ g.revenueAmount | money: s.currencyCode }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="4" class="faint" style="text-align:center">Keine Daten</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <div class="ov-donut">
+              <app-report-donut
+                [segments]="donutSegments(s)"
+                [centerLabel]="s.totalDurationSeconds | duration: 'HH:MM'"
+                centerSub="Gesamt" />
+              <div class="ov-legend">
+                @for (seg of donutSegments(s); track seg.label) {
+                  <div class="ov-legend-row">
+                    <span class="ov-dot" [style.background]="seg.color"></span>
+                    <span class="ov-legend-label">{{ seg.label }}</span>
+                    <span class="ov-legend-val mono">{{ seg.display }}</span>
+                  </div>
+                }
+              </div>
+            </div>
           </div>
         </div>
       }
@@ -324,6 +396,31 @@ type DetailRow =
     .hm-3 { background: color-mix(in srgb, var(--brand) 80%, var(--border)); }
     .hm-4 { background: var(--brand); }
     .heatmap-legend { display: flex; align-items: center; gap: 3px; margin-top: var(--sp-2); justify-content: flex-end; }
+    /* ── Clockify overview ── */
+    .ov-card { overflow: visible; }
+    .ov-bars-wrap { padding-bottom: var(--sp-4); }
+    .ov-bars { display: flex; gap: 0; align-items: flex-end; height: 220px; overflow-x: auto; }
+    .ov-bar-col { flex: 1; min-width: 60px; display: flex; flex-direction: column; align-items: center; height: 100%; }
+    .ov-bar-label-top { font-size: var(--fs-xs); font-weight: 600; margin-bottom: 4px; text-align: center; height: 18px; line-height: 18px; white-space: nowrap; }
+    .ov-bar-track { flex: 1; width: 60%; display: flex; align-items: flex-end; }
+    .ov-bar-fill { width: 100%; border-radius: var(--radius-sm) var(--radius-sm) 0 0; transition: height 0.3s; min-height: 2px; }
+    .ov-bar-col-zero .ov-bar-fill { min-height: 0; background: transparent !important; }
+    .ov-bar-label-bottom { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 6px; text-align: center; white-space: nowrap; }
+    .ov-bottom { display: flex; gap: 0; align-items: flex-start; border-top: none; }
+    .ov-table { flex: 1; min-width: 0; overflow-x: auto; }
+    .ov-table .table td, .ov-table .table th { white-space: nowrap; }
+    .ov-group-row.clickable { cursor: pointer; }
+    .ov-group-row.clickable:hover td { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+    .ov-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; vertical-align: middle; }
+    .ov-donut { flex-shrink: 0; width: 260px; padding: var(--sp-5); display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); border-left: 1px solid var(--border); }
+    .ov-legend { width: 100%; display: flex; flex-direction: column; gap: var(--sp-2); }
+    .ov-legend-row { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+    .ov-legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ov-legend-val { color: var(--text-muted); }
+    @media (max-width: 840px) {
+      .ov-bottom { flex-direction: column; }
+      .ov-donut { width: 100%; border-left: none; border-top: 1px solid var(--border); flex-direction: row; align-items: flex-start; flex-wrap: wrap; }
+    }
   `],
 })
 export class ReportsComponent {
@@ -405,6 +502,7 @@ export class ReportsComponent {
     }
     return rows;
   });
+  protected readonly dailyTrend = signal<TrendReport | null>(null);
   protected readonly attendance = signal<AttendanceReport | null>(null);
   protected readonly heatmap = signal<HeatmapReport | null>(null);
   protected readonly heatmapYear = signal(new Date().getFullYear());
@@ -518,6 +616,7 @@ export class ReportsComponent {
     this.reportApi.summary(filter).subscribe((s) => this.summary.set(s));
     this.reportApi.budget(filter).subscribe((b) => this.budget.set(b));
     this.reportApi.attendance(filter.from, filter.to).subscribe((a) => this.attendance.set(a));
+    this.reportApi.trends({ ...filter, granularity: 'DAY' }).subscribe((t) => this.dailyTrend.set(t));
     this.loadTrend();
     this.loadDetailed(filter);
   }
@@ -589,6 +688,57 @@ export class ReportsComponent {
         });
         break;
       }
+    }
+  }
+
+  donutSegments(s: SummaryReport): DonutSegment[] {
+    const total = s.totalDurationSeconds;
+    if (total === 0) return [];
+    return s.groups.map((g, i) => ({
+      label: g.label,
+      display: new DurationPipe().transform(g.durationSeconds, 'HH:MM'),
+      color: this.groupColor(g, i),
+      fraction: g.durationSeconds / total,
+    }));
+  }
+
+  groupColor(g: SummaryGroup, index: number): string {
+    if (this.f().groupBy === 'PROJECT') {
+      const proj = this.projects().find((p) => p.id === g.key);
+      if (proj?.color) return proj.color;
+    }
+    return CHART_PALETTE[index % CHART_PALETTE.length];
+  }
+
+  groupClientName(g: SummaryGroup): string | null {
+    if (this.f().groupBy !== 'PROJECT') return null;
+    const proj = this.projects().find((p) => p.id === g.key);
+    if (!proj?.clientId) return null;
+    return this.clients().find((c) => c.id === proj.clientId)?.name ?? null;
+  }
+
+  dailyBarPct(seconds: number, trend: TrendReport): number {
+    const max = Math.max(...trend.data.map((p) => p.durationSeconds), 1);
+    return (seconds / max) * 100;
+  }
+
+  dailyBarColor(): string {
+    const f = this.f();
+    if (f.groupBy === 'PROJECT' && f.projectId) {
+      const proj = this.projects().find((p) => p.id === f.projectId);
+      if (proj?.color) return proj.color;
+    }
+    return 'var(--brand)';
+  }
+
+  dayLabel(period: string): string {
+    // period is YYYY-MM-DD for daily granularity
+    if (!period || !period.includes('-')) return period;
+    try {
+      const d = new Date(period + 'T12:00:00');
+      return d.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    } catch {
+      return period;
     }
   }
 
