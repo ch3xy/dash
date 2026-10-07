@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -151,6 +152,58 @@ public class TimeEntryService {
             throw new EntityNotFoundException("One or more time entries not found");
         }
         repository.deleteAll(entries);
+    }
+
+    // Shared WHERE clause for criteria-based deletion; expects `te` (time_entries) and `p` (projects).
+    private static final String CRITERIA_WHERE = """
+            p.id = te.project_id
+              AND (CAST(:projectId AS uuid) IS NULL OR te.project_id = CAST(:projectId AS uuid))
+              AND (CAST(:clientId AS uuid) IS NULL OR p.client_id = CAST(:clientId AS uuid))
+              AND (CAST(:from AS date) IS NULL OR te.entry_date >= CAST(:from AS date))
+              AND (CAST(:to AS date) IS NULL OR te.entry_date <= CAST(:to AS date))
+            """;
+
+    public DeletePreview previewDelete(DeleteCriteria criteria) {
+        requireCriteria(criteria);
+        return jdbc.queryForObject("""
+                SELECT count(*) AS cnt, COALESCE(SUM(te.duration_seconds), 0) AS total
+                FROM time_entries te, projects p
+                WHERE
+                """ + CRITERIA_WHERE,
+                criteriaParams(criteria),
+                (rs, rowNum) -> new DeletePreview(rs.getInt("cnt"), rs.getLong("total")));
+    }
+
+    /**
+     * Deletes all entries matching the criteria. The caller passes the count it
+     * confirmed in the preview; if the data changed in between, nothing is deleted.
+     */
+    @Transactional
+    public int deleteByCriteria(DeleteCriteria criteria, int expectedCount) {
+        int actual = previewDelete(criteria).count();
+        if (actual != expectedCount) {
+            throw new IllegalStateException(
+                    "Expected " + expectedCount + " entries but " + actual + " match; nothing was deleted");
+        }
+        return jdbc.update("DELETE FROM time_entries te USING projects p WHERE " + CRITERIA_WHERE,
+                criteriaParams(criteria));
+    }
+
+    private static void requireCriteria(DeleteCriteria criteria) {
+        if (criteria.isEmpty()) {
+            throw new IllegalArgumentException("At least one criterion (date, project or client) is required");
+        }
+        if (criteria.from() != null && criteria.to() != null && criteria.to().isBefore(criteria.from())) {
+            throw new IllegalArgumentException("'to' must not be before 'from'");
+        }
+    }
+
+    private static MapSqlParameterSource criteriaParams(DeleteCriteria c) {
+        return new MapSqlParameterSource()
+                .addValue("projectId", idStr(c.projectId()), Types.VARCHAR)
+                .addValue("clientId", idStr(c.clientId()), Types.VARCHAR)
+                .addValue("from", c.from(), Types.DATE)
+                .addValue("to", c.to(), Types.DATE);
     }
 
     /**

@@ -146,6 +146,50 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void deleteByCriteriaRemovesOnlyMatchingEntries() {
+        ProjectResponse target = projectWithDefaultRate();
+        ProjectResponse other = projectWithDefaultRate();
+        TimeEntryResponse inRange = service.create(new TimeEntryRequest(
+                target.id(), null, "in", START, END, true, Set.of()));
+        TimeEntryResponse outOfRange = service.create(new TimeEntryRequest(
+                target.id(), null, "out", START.plus(java.time.Duration.ofDays(2)),
+                END.plus(java.time.Duration.ofDays(2)), true, Set.of()));
+        TimeEntryResponse otherProject = service.create(new TimeEntryRequest(
+                other.id(), null, "other", START, END, true, Set.of()));
+
+        DeleteCriteria criteria = new DeleteCriteria(
+                java.time.LocalDate.of(2026, 6, 19), java.time.LocalDate.of(2026, 6, 19), null, target.id());
+        DeletePreview preview = service.previewDelete(criteria);
+        assertThat(preview.count()).isEqualTo(1);
+        assertThat(preview.totalSeconds()).isEqualTo(7200);
+
+        assertThat(service.deleteByCriteria(criteria, 1)).isEqualTo(1);
+
+        assertThatThrownBy(() -> service.findById(inRange.id()))
+                .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
+        assertThat(service.findById(outOfRange.id())).isNotNull();
+        assertThat(service.findById(otherProject.id())).isNotNull();
+    }
+
+    @Test
+    void deleteByCriteriaWithStaleCountDeletesNothing() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse e1 = service.create(new TimeEntryRequest(
+                project.id(), null, "a", START, END, true, Set.of()));
+        DeleteCriteria criteria = new DeleteCriteria(null, null, null, project.id());
+
+        assertThatThrownBy(() -> service.deleteByCriteria(criteria, 2))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(service.findById(e1.id())).isNotNull();
+    }
+
+    @Test
+    void deleteByCriteriaRequiresAtLeastOneCriterion() {
+        assertThatThrownBy(() -> service.previewDelete(new DeleteCriteria(null, null, null, null)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void bulkDeleteWithUnknownIdDeletesNothing() {
         ProjectResponse project = projectWithDefaultRate();
         TimeEntryResponse e1 = service.create(new TimeEntryRequest(

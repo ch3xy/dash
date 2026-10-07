@@ -25,6 +25,19 @@ export interface TimeEntryQuery {
   sort?: string;
 }
 
+/** Criteria for bulk deletion; set fields are AND-combined, at least one is required. */
+export interface DeleteCriteria {
+  from?: IsoDate;
+  to?: IsoDate;
+  clientId?: Uuid;
+  projectId?: Uuid;
+}
+
+export interface DeletePreview {
+  count: number;
+  totalSeconds: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class TimeEntryApiService {
   private readonly http = inject(HttpClient);
@@ -49,6 +62,19 @@ export class TimeEntryApiService {
 
   deleteBulk(ids: Uuid[]): Observable<void> {
     return this.http.post<void>('/time-entries/bulk-delete', { ids });
+  }
+
+  deletePreview(criteria: DeleteCriteria): Observable<DeletePreview> {
+    return this.http.get<DeletePreview>('/time-entries/delete-preview', {
+      params: toParams(criteria),
+    });
+  }
+
+  deleteByCriteria(criteria: DeleteCriteria, expectedCount: number): Observable<{ deleted: number }> {
+    return this.http.post<{ deleted: number }>('/time-entries/delete-by-criteria', {
+      ...criteria,
+      expectedCount,
+    });
   }
 
   updateBulk(input: {

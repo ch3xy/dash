@@ -99,6 +99,39 @@ public class TimeEntryController {
     }
 
     @Operation(
+            summary = "Vorschau: Zeiteinträge nach Kriterien löschen",
+            description = "Liefert Anzahl und Gesamtdauer der Einträge, die mit denselben Kriterien über /delete-by-criteria gelöscht würden. Mindestens ein Kriterium ist Pflicht; gesetzte Kriterien werden UND-verknüpft."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Vorschau berechnet"),
+            @ApiResponse(responseCode = "422", description = "Kein Kriterium angegeben oder ungültiger Zeitraum")
+    })
+    @GetMapping("/delete-preview")
+    public ResponseEntity<DeletePreview> deletePreview(
+            @Parameter(description = "Startdatum (inklusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Enddatum (inklusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @Parameter(description = "UUID des Kunden") @RequestParam(required = false) UUID clientId,
+            @Parameter(description = "UUID des Projekts") @RequestParam(required = false) UUID projectId) {
+        return ResponseEntity.ok(service.previewDelete(new DeleteCriteria(from, to, clientId, projectId)));
+    }
+
+    @Operation(
+            summary = "Zeiteinträge nach Kriterien löschen",
+            description = "Löscht alle Einträge, die den Kriterien (Zeitraum, Kunde, Projekt) entsprechen, dauerhaft. expectedCount muss der Anzahl aus der Vorschau entsprechen, sonst wird nichts gelöscht."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Einträge gelöscht; Antwort enthält die Anzahl"),
+            @ApiResponse(responseCode = "422", description = "Kein Kriterium angegeben oder ungültiger Zeitraum"),
+            @ApiResponse(responseCode = "409", description = "Anzahl stimmt nicht mit expectedCount überein")
+    })
+    @PostMapping("/delete-by-criteria")
+    public ResponseEntity<DeletedCount> deleteByCriteria(@Valid @RequestBody DeleteByCriteriaRequest req) {
+        return ResponseEntity.ok(new DeletedCount(service.deleteByCriteria(req.criteria(), req.expectedCount())));
+    }
+
+    record DeletedCount(int deleted) {}
+
+    @Operation(
             summary = "Mehrere Zeiteinträge auf einmal ändern",
             description = "Wendet die gesetzten Felder (Billable-Status, Tags hinzufügen/entfernen) auf alle angegebenen Zeiteinträge an. Bei Billable-Änderung wird der Umsatz-Snapshot aus dem gespeicherten Stundensatz neu berechnet."
     )
