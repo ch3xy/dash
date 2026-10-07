@@ -15,7 +15,9 @@ import { DateRangePickerComponent } from '../../shared/components/date-range-pic
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
 import { addDays, toIsoDate } from '../../shared/utils/date-utils';
-import { LucidePlus } from '@lucide/angular';
+import { LucideLock, LucidePlus } from '@lucide/angular';
+import { MonthLockStateService } from '../../core/month-lock-state.service';
+import { MonthLockedBannerComponent } from '../../shared/components/month-locked-banner.component';
 
 interface Row {
   key: string;
@@ -58,16 +60,19 @@ export function parseDuration(input: string): number | null {
 @Component({
   selector: 'app-timesheet',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe, DateRangePickerComponent, LucidePlus],
+  imports: [FormsModule, DurationPipe, DateRangePickerComponent, MonthLockedBannerComponent, LucidePlus, LucideLock],
   template: `
     <div class="page">
       <div class="page-header">
         <h1>Timesheet</h1>
         <div class="page-controls">
-          <button class="btn btn-sm" (click)="copyPreviousWeek()" [disabled]="saving()">Vorwoche kopieren</button>
+          <button class="btn btn-sm" (click)="copyPreviousWeek()" [disabled]="saving() || weekLocked()"
+                  [title]="weekLocked() ? 'Woche liegt in einem abgeschlossenen Monat' : ''">Vorwoche kopieren</button>
           <app-date-range-picker mode="week" ariaLabel="Woche" [range]="week()" (rangeChange)="setWeek($event)" />
         </div>
       </div>
+
+      <app-month-locked-banner [dates]="[week().from, week().to]" />
 
       @if (loading() && !report()) {
         <div class="state"><div class="spinner"></div></div>
@@ -83,7 +88,10 @@ export function parseDuration(input: string): number | null {
               <tr>
                 <th style="min-width: 200px;">Projekt / Task</th>
                 @for (d of r.days; track d.date) {
-                  <th class="num">{{ dayLabel(d.date) }}</th>
+                  <th class="num" [class.locked-day]="lockState.isLocked(d.date)">
+                    @if (lockState.isLocked(d.date)) { <svg lucideLock [size]="12" aria-label="abgeschlossen"></svg> }
+                    {{ dayLabel(d.date) }}
+                  </th>
                 }
                 <th class="num">Σ</th>
               </tr>
@@ -105,6 +113,7 @@ export function parseDuration(input: string): number | null {
                         [value]="row.byDate[d.date] ? (row.byDate[d.date] | duration: 'HH:MM') : ''"
                         placeholder="·"
                         [disabled]="saving()"
+                        [readOnly]="lockState.isLocked(d.date)"
                         [attr.aria-label]="row.projectName + (row.taskName ? ' · ' + row.taskName : '') + ' am ' + d.date"
                         (focus)="$any($event.target).select()"
                         (keydown.enter)="$any($event.target).blur()"
@@ -152,7 +161,9 @@ export function parseDuration(input: string): number | null {
       width: 64px; text-align: right; border: 1px solid transparent; border-radius: var(--radius-sm, 4px);
       background: transparent; color: inherit; padding: 4px 6px; font: inherit;
     }
-    .cell-input:hover { background: var(--brand-soft); }
+    .cell-input:hover:not([readonly]) { background: var(--brand-soft); }
+    .cell-input[readonly] { color: var(--text-muted); cursor: default; }
+    .locked-day { color: var(--text-muted); }
     .cell-input:focus { outline: none; border-color: var(--brand); background: var(--surface, transparent); }
     .text-center { text-align: center; }
   `],
@@ -172,6 +183,7 @@ export class TimesheetComponent {
   protected readonly loading = signal(true);
   protected readonly error = signal(false);
   protected readonly saving = signal(false);
+  protected readonly lockState = inject(MonthLockStateService);
   /** Displayed Mon–Sun week from the URL (?week=YYYY-MM-DD), defaulting to the current week. */
   protected readonly week = toSignal(
     this.route.queryParamMap.pipe(map((p) => weekRange(p.get('week') || toIsoDate(new Date())))),
@@ -181,6 +193,12 @@ export class TimesheetComponent {
   protected get weekStart(): Date {
     return parseIsoDate(this.week().from);
   }
+  /** Copying into a week that touches a closed month would be rejected by the backend. */
+  protected readonly weekLocked = computed(() => {
+    this.lockState.locks();
+    return this.lockState.anyLocked(this.week().from, this.week().to);
+  });
+
   private readonly extraRows = signal<ExtraRow[]>([]);
   private readonly taskNames = signal<Record<string, string>>({});
 
@@ -291,6 +309,9 @@ export class TimesheetComponent {
 
   async saveCell(event: Event, row: Row, date: string): Promise<void> {
     const input = event.target as HTMLInputElement;
+    if (this.lockState.isLocked(date)) {
+      return;
+    }
     const current = row.byDate[date] ?? 0;
     const seconds = parseDuration(input.value);
     if (seconds == null || seconds > 24 * 3600) {

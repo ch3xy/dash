@@ -36,6 +36,8 @@ export interface DeleteCriteria {
 export interface DeletePreview {
   count: number;
   totalSeconds: number;
+  /** Entries in closed months; deletion is rejected while this is > 0. */
+  lockedCount: number;
 }
 
 @Injectable({ providedIn: 'root' })

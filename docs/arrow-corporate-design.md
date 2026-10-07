@@ -210,7 +210,7 @@ Alle Produkte teilen dieselbe Shell: **Sidebar links, Topbar oben (produktspezif
 
 Gruppen nach Aufgabe, nicht nach Technik; 2–4 Einträge je Gruppe. Einstellungen stehen immer im Footer,
 nie in einer Gruppe. Beispiel dash: **Übersicht** (Dashboard, Reports) · **Erfassung** (Timer, Timesheet,
-Kalender) · **Stammdaten** (Kunden, Projekte, Tags).
+Kalender) · **Stammdaten** (Kunden, Projekte, Tags) · **Verwaltung** (Monatsabschluss, Daten).
 
 ### Mobil
 

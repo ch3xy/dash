@@ -2,7 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { ClientApiService } from '../../core/api/client-api.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
@@ -34,7 +34,11 @@ import { persistQueryParams } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DateRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
-import { LucideChevronLeft, LucideChevronRight } from '@lucide/angular';
+import { LucideChevronLeft, LucideChevronRight, LucideLock } from '@lucide/angular';
+import { ClosingApiService } from '../../core/api/closing-api.service';
+import { DialogService } from '../../core/dialog.service';
+import { MonthLockStateService, monthLabel } from '../../core/month-lock-state.service';
+import { ToastService } from '../../core/toast.service';
 
 const GROUP_OPTIONS: GroupBy[] = ['PROJECT', 'CLIENT', 'TASK', 'TAG', 'DAY', 'WEEK', 'MONTH'];
 
@@ -51,7 +55,7 @@ type DetailRow =
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, DateRangePickerComponent, ReportDonutComponent, LucideChevronLeft, LucideChevronRight],
+  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, DateRangePickerComponent, ReportDonutComponent, RouterLink, LucideChevronLeft, LucideChevronRight, LucideLock],
   template: `
     <div class="page">
       <!-- Top bar: view toggle + export + date range -->
@@ -61,6 +65,13 @@ type DetailRow =
           <button class="rpt-tab" [class.active]="view() === 'detailliert'" (click)="view.set('detailliert')">Detailliert</button>
         </div>
         <div class="page-controls">
+          @if (rangeMonth(); as m) {
+            @if (lockState.isLocked(m + '-01')) {
+              <a class="badge ok" routerLink="/closing" title="Zum Monatsabschluss"><svg lucideLock [size]="12"></svg> Abgeschlossen</a>
+            } @else if (m < currentMonth) {
+              <button class="btn btn-sm" type="button" (click)="closeMonth(m)"><svg lucideLock></svg> Monat abschließen</button>
+            }
+          }
           <div class="export-wrap">
             <button class="btn btn-sm" (click)="exportOpen.update(v => !v)" type="button">Export ▾</button>
             @if (exportOpen()) {
@@ -453,6 +464,11 @@ export class ReportsComponent {
   private readonly router = inject(Router);
   protected readonly view = signal<'uebersicht' | 'detailliert'>('uebersicht');
   protected readonly exportOpen = signal(false);
+  protected readonly lockState = inject(MonthLockStateService);
+  private readonly closingApi = inject(ClosingApiService);
+  private readonly dialog = inject(DialogService);
+  private readonly toast = inject(ToastService);
+  protected readonly currentMonth = toIsoDate(new Date()).slice(0, 7);
 
   protected readonly groupOptions = GROUP_OPTIONS;
   protected readonly projects = signal<Project[]>([]);
@@ -567,6 +583,29 @@ export class ReportsComponent {
     const def = this.defaultFilter();
     return { from: from ?? def.from!, to: to ?? def.to! };
   });
+
+  /** yyyy-MM if the selected range is exactly one calendar month, else null. */
+  protected readonly rangeMonth = computed(() => {
+    const { from, to } = this.range();
+    const month = from.slice(0, 7);
+    const [y, m] = month.split('-').map(Number);
+    const last = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+    return from === `${month}-01` && to === last ? month : null;
+  });
+
+  protected async closeMonth(month: string): Promise<void> {
+    const note = await this.dialog.prompt({
+      title: `${monthLabel(month)} abschließen`,
+      message: 'Alle Zeiteinträge des Monats werden schreibgeschützt, bis der Monat wieder freigegeben wird.',
+      label: 'Notiz (optional), z. B. Rechnungsnummer',
+      confirmLabel: 'Abschließen',
+    });
+    if (note === null) return;
+    this.closingApi.lock(month, note.trim()).subscribe(() => {
+      this.toast.success(`${monthLabel(month)} abgeschlossen`);
+      this.lockState.refresh().subscribe();
+    });
+  }
 
   protected readonly billableStr = computed(() => {
     const b = this.f().billable;

@@ -25,6 +25,7 @@ Dieses Verzeichnis enthält alle maschinenlesbaren Implementierungsdetails für 
 | [modules/report.md](modules/report.md) | Report – Queries, Filter, Metriken, Export |
 | [modules/dashboard.md](modules/dashboard.md) | Dashboard – Aggregationen für die Startseite |
 | [modules/settings.md](modules/settings.md) | AppSettings – Schlüssel-Wert-Konfiguration |
+| [modules/closing.md](modules/closing.md) | Monatsabschluss – Monate sperren/freigeben |
 
 ### Regeln (`rules/`)
 

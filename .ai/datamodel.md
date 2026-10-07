@@ -123,6 +123,14 @@ insert into app_settings (key, value) values
   ('default_rate',      '0.00'),
   ('rounding_rule',     'NONE'),
   ('rounding_minutes',  '15');
+
+-- V6__create_month_locks.sql  (Monatsabschluss, siehe modules/closing.md)
+create table month_locks (
+    month     date        primary key,          -- immer der Monatserste
+    locked_at timestamptz not null,
+    note      text,
+    constraint chk_month_is_first_day check (extract(day from month) = 1)
+);
 ```
 
 ---

@@ -14,7 +14,9 @@ import { AutofocusDirective } from '../../shared/directives/autofocus.directive'
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils/date-utils';
-import { LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucidePlus, LucideSplit, LucideX } from '@lucide/angular';
+import { LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucidePlus, LucideLock, LucideSplit, LucideX } from '@lucide/angular';
+import { MonthLockStateService } from '../../core/month-lock-state.service';
+import { MonthLockedBannerComponent } from '../../shared/components/month-locked-banner.component';
 
 interface EntryGroup {
   key: string;
@@ -32,7 +34,7 @@ interface EntryGroup {
 @Component({
   selector: 'app-timer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DurationPipe, MoneyPipe, AutofocusDirective, LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucidePlus, LucideSplit, LucideX],
+  imports: [FormsModule, DurationPipe, MoneyPipe, AutofocusDirective, MonthLockedBannerComponent, LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucideLock, LucidePlus, LucideSplit, LucideX],
   template: `
     <div class="page">
       <div class="page-header">
@@ -45,8 +47,11 @@ interface EntryGroup {
           <button class="btn btn-sm" (click)="shiftDay(1)" [disabled]="viewDate() === todayIso" aria-label="Nächster Tag"><svg lucideChevronRight></svg></button>
           <button class="btn btn-sm" (click)="goToday()" [disabled]="viewDate() === todayIso">Heute</button>
         </div>
-        <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Eintrag</button>
+        <button class="btn btn-primary" (click)="openNew()" [disabled]="dayLocked()"
+                [title]="dayLocked() ? 'Monat ist abgeschlossen' : ''"><svg lucidePlus></svg> Eintrag</button>
       </div>
+
+      <app-month-locked-banner [dates]="[viewDate()]" />
 
       <div class="card card-pad row-between">
         <div>
@@ -76,7 +81,7 @@ interface EntryGroup {
       } @else if (entries().length === 0) {
         <div class="card state">Noch keine Einträge {{ viewDateLabel() === 'Heute' ? 'heute' : 'an diesem Tag' }}.</div>
       } @else {
-        @if (selected().size > 0) {
+        @if (selected().size > 0 && !dayLocked()) {
           <div class="card card-pad row wrap gap-2 mt-4 bulk-bar">
             <strong>{{ selected().size }} ausgewählt</strong>
             <button class="btn btn-sm" (click)="bulkBillable(true)">Abrechenbar</button>
@@ -94,8 +99,10 @@ interface EntryGroup {
             <thead>
               <tr>
                 <th class="check-col">
-                  <input type="checkbox" [checked]="allSelected()" (change)="toggleSelectAll()"
-                         title="Alle auswählen" />
+                  @if (!dayLocked()) {
+                    <input type="checkbox" [checked]="allSelected()" (change)="toggleSelectAll()"
+                           title="Alle auswählen" />
+                  }
                 </th>
                 <th></th>
                 <th>Beschreibung</th>
@@ -110,7 +117,9 @@ interface EntryGroup {
                 <!-- Group header row -->
                 <tr class="group-row" [class.group-expanded]="expandedGroups().has(g.key)">
                   <td class="check-col">
-                    <input type="checkbox" [checked]="groupSelected(g)" (change)="toggleGroupSelection(g)" />
+                    @if (!dayLocked()) {
+                      <input type="checkbox" [checked]="groupSelected(g)" (change)="toggleGroupSelection(g)" />
+                    }
                   </td>
                   <td class="expand-col">
                     @if (g.entries.length > 1) {
@@ -128,10 +137,10 @@ interface EntryGroup {
                              (keydown.escape)="editingDescId.set(null)"
                              (blur)="saveDescription(g.entries[0], $any($event.target).value)" />
                     } @else {
-                      <span [class.text-link]="g.entries.length === 1"
-                            (click)="g.entries.length === 1 ? editingDescId.set(g.entries[0].id) : null"
-                            [title]="g.entries.length === 1 ? 'Klicken zum Bearbeiten' : ''"
-                            [style.cursor]="g.entries.length === 1 ? 'text' : 'default'">
+                      <span [class.text-link]="g.entries.length === 1 && !dayLocked()"
+                            (click)="g.entries.length === 1 && !dayLocked() ? editingDescId.set(g.entries[0].id) : null"
+                            [title]="g.entries.length === 1 && !dayLocked() ? 'Klicken zum Bearbeiten' : ''"
+                            [style.cursor]="g.entries.length === 1 && !dayLocked() ? 'text' : 'default'">
                         {{ g.description || '(keine Beschreibung)' }}
                       </span>
                       @if (g.entries.length > 1) {
@@ -159,10 +168,14 @@ interface EntryGroup {
                   <td class="text-right" style="white-space: nowrap;">
                     @if (g.entries.length === 1) {
                       <button class="btn btn-ghost btn-sm" (click)="continueEntry(g.entries[0])" title="Fortsetzen" aria-label="Fortsetzen"><svg lucidePlay></svg></button>
-                      <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
-                      <button class="btn btn-ghost btn-sm" (click)="openSplit(g.entries[0])" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
-                      <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
-                      <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen">🗑</button>
+                      @if (!dayLocked()) {
+                        <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
+                        <button class="btn btn-ghost btn-sm" (click)="openSplit(g.entries[0])" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
+                        <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
+                        <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen">🗑</button>
+                      } @else {
+                        <span class="faint" title="Monat ist abgeschlossen"><svg lucideLock [size]="14"></svg></span>
+                      }
                     } @else {
                       <button class="btn btn-ghost btn-sm" (click)="toggleGroup(g.key)"
                               title="{{ expandedGroups().has(g.key) ? 'Einklappen' : 'Aufklappen' }}">
@@ -177,7 +190,9 @@ interface EntryGroup {
                   @for (e of g.entries; track e.id) {
                     <tr class="sub-row">
                       <td class="check-col">
-                        <input type="checkbox" [checked]="selected().has(e.id)" (change)="toggleSelection(e.id)" />
+                        @if (!dayLocked()) {
+                          <input type="checkbox" [checked]="selected().has(e.id)" (change)="toggleSelection(e.id)" />
+                        }
                       </td>
                       <td></td>
                       <td class="faint" style="font-size: var(--fs-sm);">
@@ -192,10 +207,14 @@ interface EntryGroup {
                       </td>
                       <td class="text-right" style="white-space: nowrap;">
                         <button class="btn btn-ghost btn-sm" (click)="continueEntry(e)" title="Fortsetzen" aria-label="Fortsetzen"><svg lucidePlay></svg></button>
-                        <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
-                        <button class="btn btn-ghost btn-sm" (click)="openSplit(e)" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
-                        <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
-                        <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
+                        @if (!dayLocked()) {
+                          <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
+                          <button class="btn btn-ghost btn-sm" (click)="openSplit(e)" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
+                          <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
+                          <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
+                        } @else {
+                          <span class="faint" title="Monat ist abgeschlossen"><svg lucideLock [size]="14"></svg></span>
+                        }
                       </td>
                     </tr>
                   }
@@ -313,6 +332,12 @@ export class TimerComponent {
 
   protected readonly todayIso = today();
   protected readonly viewDate = signal(today());
+  private readonly lockState = inject(MonthLockStateService);
+  /** Entries of a closed month are read-only; only "Fortsetzen" (creates today's entry) stays available. */
+  protected readonly dayLocked = computed(() => {
+    this.lockState.locks();
+    return this.lockState.isLocked(this.viewDate());
+  });
   protected readonly viewDateLabel = computed(() => {
     const iso = this.viewDate();
     if (iso === this.todayIso) return 'Heute';

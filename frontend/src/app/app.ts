@@ -6,10 +6,12 @@ import {
   LucideChartPie,
   LucideChevronLeft,
   LucideChevronRight,
+  LucideDatabase,
   LucideDynamicIcon,
   LucideFolderKanban,
   LucideIcon,
   LucideLayoutDashboard,
+  LucideLock,
   LucideMenu,
   LucideMoon,
   LucideSettings,
@@ -314,6 +316,13 @@ export class App {
         { path: '/clients', label: 'Kunden', icon: LucideUsers },
         { path: '/projects', label: 'Projekte', icon: LucideFolderKanban },
         { path: '/tags', label: 'Tags', icon: LucideTag },
+      ],
+    },
+    {
+      label: 'Verwaltung',
+      items: [
+        { path: '/closing', label: 'Monatsabschluss', icon: LucideLock },
+        { path: '/data', label: 'Daten', icon: LucideDatabase },
       ],
     },
   ];

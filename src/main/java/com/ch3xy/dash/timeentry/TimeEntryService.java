@@ -1,5 +1,6 @@
 package com.ch3xy.dash.timeentry;
 
+import com.ch3xy.dash.closing.MonthLockService;
 import com.ch3xy.dash.project.Project;
 import com.ch3xy.dash.project.ProjectRepository;
 import com.ch3xy.dash.settings.AppSettingsService;
@@ -42,6 +43,7 @@ public class TimeEntryService {
     private final RateResolverService rateResolver;
     private final AppSettingsService settingsService;
     private final NamedParameterJdbcTemplate jdbc;
+    private final MonthLockService monthLocks;
 
     public TimeEntryService(TimeEntryRepository repository,
                             ProjectRepository projectRepository,
@@ -49,7 +51,8 @@ public class TimeEntryService {
                             TagRepository tagRepository,
                             RateResolverService rateResolver,
                             AppSettingsService settingsService,
-                            NamedParameterJdbcTemplate jdbc) {
+                            NamedParameterJdbcTemplate jdbc,
+                            MonthLockService monthLocks) {
         this.repository = repository;
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
@@ -57,6 +60,7 @@ public class TimeEntryService {
         this.rateResolver = rateResolver;
         this.settingsService = settingsService;
         this.jdbc = jdbc;
+        this.monthLocks = monthLocks;
     }
 
     /**
@@ -114,12 +118,14 @@ public class TimeEntryService {
     /**
      * Manual and copied entries are rejected on archived projects. TIMER (stopping a
      * timer started before archiving), IMPORT and ADJUSTMENT (split) stay allowed.
+     * No source may write into a closed month (Monatsabschluss).
      */
     @Transactional
     public TimeEntryResponse create(TimeEntryRequest req, TimeEntrySource source) {
         TimeEntry entry = new TimeEntry();
         entry.setSource(source);
         apply(entry, req);
+        monthLocks.requireOpen(entry.getEntryDate());
         if (source == TimeEntrySource.MANUAL) {
             entry.getProject().requireNotArchived();
         }
@@ -142,8 +148,10 @@ public class TimeEntryService {
     @Transactional
     public TimeEntryResponse update(UUID id, TimeEntryRequest req) {
         TimeEntry entry = require(id);
+        monthLocks.requireOpen(entry.getEntryDate());
         UUID previousProjectId = entry.getProject().getId();
         apply(entry, req);
+        monthLocks.requireOpen(entry.getEntryDate());
         // Editing an entry of an archived project is fine; moving time onto one is not.
         if (!entry.getProject().getId().equals(previousProjectId)) {
             entry.getProject().requireNotArchived();
@@ -154,6 +162,7 @@ public class TimeEntryService {
     @Transactional
     public void delete(UUID id) {
         TimeEntry entry = require(id);
+        monthLocks.requireOpen(entry.getEntryDate());
         repository.delete(entry);
     }
 
@@ -163,6 +172,7 @@ public class TimeEntryService {
         if (entries.size() != new HashSet<>(ids).size()) {
             throw new EntityNotFoundException("One or more time entries not found");
         }
+        requireOpen(entries);
         repository.deleteAll(entries);
     }
 
@@ -178,12 +188,15 @@ public class TimeEntryService {
     public DeletePreview previewDelete(DeleteCriteria criteria) {
         requireCriteria(criteria);
         return jdbc.queryForObject("""
-                SELECT count(*) AS cnt, COALESCE(SUM(te.duration_seconds), 0) AS total
+                SELECT count(*) AS cnt, COALESCE(SUM(te.duration_seconds), 0) AS total,
+                       count(*) FILTER (WHERE EXISTS (
+                           SELECT 1 FROM month_locks ml
+                           WHERE ml.month = CAST(date_trunc('month', te.entry_date) AS date))) AS locked
                 FROM time_entries te, projects p
                 WHERE
                 """ + CRITERIA_WHERE,
                 criteriaParams(criteria),
-                (rs, rowNum) -> new DeletePreview(rs.getInt("cnt"), rs.getLong("total")));
+                (rs, rowNum) -> new DeletePreview(rs.getInt("cnt"), rs.getLong("total"), rs.getInt("locked")));
     }
 
     /**
@@ -192,7 +205,12 @@ public class TimeEntryService {
      */
     @Transactional
     public int deleteByCriteria(DeleteCriteria criteria, int expectedCount) {
-        int actual = previewDelete(criteria).count();
+        DeletePreview preview = previewDelete(criteria);
+        if (preview.lockedCount() > 0) {
+            throw new IllegalStateException(preview.lockedCount()
+                    + " der Einträge liegen in abgeschlossenen Monaten – es wurde nichts gelöscht");
+        }
+        int actual = preview.count();
         if (actual != expectedCount) {
             throw new IllegalStateException(
                     "Expected " + expectedCount + " entries but " + actual + " match; nothing was deleted");
@@ -229,6 +247,7 @@ public class TimeEntryService {
         if (entries.size() != new HashSet<>(req.ids()).size()) {
             throw new EntityNotFoundException("One or more time entries not found");
         }
+        requireOpen(entries);
         Set<Tag> tagsToAdd = req.addTagIds() != null && !req.addTagIds().isEmpty()
                 ? resolveTags(req.addTagIds()) : Set.of();
         Set<UUID> tagIdsToRemove = req.removeTagIds() != null ? req.removeTagIds() : Set.of();
@@ -250,6 +269,7 @@ public class TimeEntryService {
         if (!splitAt.isAfter(original.getStartTime()) || !splitAt.isBefore(original.getEndTime())) {
             throw new IllegalArgumentException("splitAt must be strictly between startTime and endTime");
         }
+        monthLocks.requireOpen(original.getEntryDate());
         Set<UUID> tagIds = original.getTags().stream().map(Tag::getId).collect(Collectors.toSet());
         UUID projectId = original.getProject().getId();
         UUID taskId = original.getTask() != null ? original.getTask().getId() : null;
@@ -318,6 +338,10 @@ public class TimeEntryService {
             throw new EntityNotFoundException("One or more tags not found");
         }
         return tags;
+    }
+
+    private void requireOpen(List<TimeEntry> entries) {
+        entries.stream().map(TimeEntry::getEntryDate).distinct().forEach(monthLocks::requireOpen);
     }
 
     private TimeEntry require(UUID id) {

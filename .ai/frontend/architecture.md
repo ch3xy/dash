@@ -73,6 +73,8 @@ frontend/src/app/
     │   ├── summary-cards.component.ts
     │   ├── report-chart.component.ts
     │   └── report-table.component.ts
+    ├── data/               # Backup, Restore, Clockify-Import, Zeiteinträge löschen
+    │   └── data.component.ts
     └── settings/
         └── settings.component.ts
 ```
@@ -93,6 +95,7 @@ export const routes: Routes = [
   { path: 'projects',   loadComponent: () => import('./features/projects/projects.component') },
   { path: 'projects/:id', loadComponent: () => import('./features/projects/project-detail.component') },
   { path: 'reports',    loadComponent: () => import('./features/reports/reports.component') },
+  { path: 'data',       loadComponent: () => import('./features/data/data.component') },
   { path: 'settings',   loadComponent: () => import('./features/settings/settings.component') },
 ];
 ```

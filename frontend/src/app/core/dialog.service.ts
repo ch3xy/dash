@@ -10,6 +10,7 @@ export interface ConfirmOptions {
 
 export interface PromptOptions {
   title: string;
+  message?: string;
   label?: string;
   value?: string;
   confirmLabel?: string;
@@ -57,6 +58,7 @@ export class DialogService {
       this.request.set({
         kind: 'prompt',
         title: opts.title,
+        message: opts.message,
         label: opts.label,
         placeholder: opts.placeholder,
         initialValue: opts.value ?? '',

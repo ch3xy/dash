@@ -593,6 +593,32 @@ Budget-Reset des Projekts, nicht dem Zeitraum.
 
 ---
 
+## Monatsabschluss
+
+Siehe [modules/closing.md](modules/closing.md). `{month}` im Format `yyyy-MM`.
+
+### `GET /closing/months` → `200`
+Monate mit Einträgen oder Sperre plus Vormonat, neueste zuerst:
+```json
+[{ "month": "2026-09", "locked": true, "lockedAt": "2026-10-07T14:00:00Z", "note": "RE-2026-09",
+   "lockable": false, "entryCount": 84, "totalSeconds": 540000, "billableSeconds": 500000,
+   "revenue": 12500.00, "currency": "EUR" }]
+```
+
+### `GET /closing/locks` → `200`
+`[{ "month": "2026-09", "lockedAt": "…", "note": "…" }]`
+
+### `POST /closing/months/{month}/lock` → `200`
+Body optional: `{ "note": "RE-2026-09" }`. `409` bereits abgeschlossen, `422` Monat nicht vergangen.
+
+### `DELETE /closing/months/{month}/lock` → `204`
+Freigabe. `404` wenn nicht abgeschlossen.
+
+Schreibende TimeEntry-Endpunkte antworten mit `409`, wenn ein betroffener Monat abgeschlossen ist.
+`GET /time-entries/delete-preview` liefert zusätzlich `lockedCount`.
+
+---
+
 ## Daten-Import / -Export
 
 ### `POST /import/clockify` → `200`

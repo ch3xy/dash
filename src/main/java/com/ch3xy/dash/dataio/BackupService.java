@@ -1,5 +1,6 @@
 package com.ch3xy.dash.dataio;
 
+import com.ch3xy.dash.closing.MonthLockService;
 import com.ch3xy.dash.client.ClientResponse;
 import com.ch3xy.dash.client.ClientService;
 import com.ch3xy.dash.project.ProjectRateResponse;
@@ -32,19 +33,22 @@ public class BackupService {
     private final TaskService taskService;
     private final TagService tagService;
     private final TimeEntryService timeEntryService;
+    private final MonthLockService monthLockService;
 
     public BackupService(AppSettingsService settingsService,
                          ClientService clientService,
                          ProjectService projectService,
                          TaskService taskService,
                          TagService tagService,
-                         TimeEntryService timeEntryService) {
+                         TimeEntryService timeEntryService,
+                         MonthLockService monthLockService) {
         this.settingsService = settingsService;
         this.clientService = clientService;
         this.projectService = projectService;
         this.taskService = taskService;
         this.tagService = tagService;
         this.timeEntryService = timeEntryService;
+        this.monthLockService = monthLockService;
     }
 
     @Transactional(readOnly = true)
@@ -71,7 +75,8 @@ public class BackupService {
                 rates,
                 tasks,
                 tagService.findAll(true),
-                timeEntries
+                timeEntries,
+                monthLockService.findLocks()
         );
     }
 

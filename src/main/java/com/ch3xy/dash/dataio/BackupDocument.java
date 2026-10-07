@@ -1,6 +1,7 @@
 package com.ch3xy.dash.dataio;
 
 import com.ch3xy.dash.client.ClientResponse;
+import com.ch3xy.dash.closing.MonthLockResponse;
 import com.ch3xy.dash.project.ProjectRateResponse;
 import com.ch3xy.dash.project.ProjectResponse;
 import com.ch3xy.dash.settings.AppSettingsResponse;
@@ -21,5 +22,7 @@ public record BackupDocument(
         List<ProjectRateResponse> projectRates,
         List<TaskResponse> tasks,
         List<TagResponse> tags,
-        List<TimeEntryResponse> timeEntries
+        List<TimeEntryResponse> timeEntries,
+        // Monatsabschluss; null in backups created before month locks existed.
+        List<MonthLockResponse> monthLocks
 ) {}

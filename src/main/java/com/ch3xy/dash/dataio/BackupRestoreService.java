@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
 
@@ -48,6 +49,7 @@ public class BackupRestoreService {
         insertTags(doc);
         insertTimeEntries(doc);
         insertTimeEntryTags(doc);
+        insertMonthLocks(doc);
         restoreSettings(doc);
 
         return new RestoreResult(
@@ -58,7 +60,7 @@ public class BackupRestoreService {
     private void wipe() {
         // Children before parents; running timers are transient and intentionally dropped.
         for (String table : List.of(
-                "time_entry_tags", "running_timer_tags", "time_entries", "running_timers",
+                "month_locks", "time_entry_tags", "running_timer_tags", "time_entries", "running_timers",
                 "project_rates", "tasks", "projects", "tags", "clients")) {
             jdbc.getJdbcOperations().update("DELETE FROM " + table);
         }
@@ -223,6 +225,19 @@ public class BackupRestoreService {
         }
         jdbc.batchUpdate("""
                 INSERT INTO time_entry_tags (time_entry_id, tag_id) VALUES (:timeEntryId, :tagId)
+                """, rows);
+    }
+
+    private void insertMonthLocks(BackupDocument doc) {
+        if (isEmpty(doc.monthLocks())) {
+            return;
+        }
+        SqlParameterSource[] rows = doc.monthLocks().stream().map(l -> new MapSqlParameterSource()
+                .addValue("month", YearMonth.parse(l.month()).atDay(1))
+                .addValue("lockedAt", ts(l.lockedAt()))
+                .addValue("note", l.note())).toArray(SqlParameterSource[]::new);
+        jdbc.batchUpdate("""
+                INSERT INTO month_locks (month, locked_at, note) VALUES (:month, :lockedAt, :note)
                 """, rows);
     }
 

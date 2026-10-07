@@ -55,6 +55,17 @@ export const routes: Routes = [
       import('./features/reports/reports.component').then((m) => m.ReportsComponent),
   },
   {
+    path: 'closing',
+    title: 'Monatsabschluss',
+    loadComponent: () =>
+      import('./features/closing/closing.component').then((m) => m.ClosingComponent),
+  },
+  {
+    path: 'data',
+    title: 'Daten',
+    loadComponent: () => import('./features/data/data.component').then((m) => m.DataComponent),
+  },
+  {
     path: 'settings',
     title: 'Einstellungen',
     loadComponent: () =>

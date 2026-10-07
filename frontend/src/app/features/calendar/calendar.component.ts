@@ -28,7 +28,9 @@ import { DateRangePickerComponent } from '../../shared/components/date-range-pic
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toInstant, toIsoDate } from '../../shared/utils/date-utils';
-import { LucideUnfoldVertical, LucideX, LucideZoomIn, LucideZoomOut } from '@lucide/angular';
+import { LucideLock, LucideUnfoldVertical, LucideX, LucideZoomIn, LucideZoomOut } from '@lucide/angular';
+import { MonthLockStateService } from '../../core/month-lock-state.service';
+import { MonthLockedBannerComponent } from '../../shared/components/month-locked-banner.component';
 
 const SNAP_MIN = 15;
 const DAY_MIN = 24 * 60;
@@ -67,7 +69,7 @@ type Interact =
 @Component({
   selector: 'app-calendar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DurationPipe, FormsModule, DateRangePickerComponent, LucideX, LucideZoomIn, LucideZoomOut, LucideUnfoldVertical],
+  imports: [DurationPipe, FormsModule, DateRangePickerComponent, MonthLockedBannerComponent, LucideLock, LucideX, LucideZoomIn, LucideZoomOut, LucideUnfoldVertical],
   template: `
     <div class="page cal-page">
       <div class="page-header">
@@ -85,6 +87,8 @@ type Interact =
         </div>
       </div>
 
+      <app-month-locked-banner [dates]="[week().from, week().to]" />
+
       <div class="card cal-scroll" #scroller [class.refreshing]="loading() && loaded()">
         @if (!loaded()) {
           <div class="state"><div class="spinner"></div></div>
@@ -101,8 +105,11 @@ type Interact =
             </div>
 
             @for (col of columns(); track col.date) {
-              <div class="day" [class.today-col]="col.date === todayIso">
-                <div class="hd" [class.today-hd]="col.date === todayIso">{{ col.label }}</div>
+              <div class="day" [class.today-col]="col.date === todayIso" [class.locked-col]="isLocked(col.date)">
+                <div class="hd" [class.today-hd]="col.date === todayIso">
+                  @if (isLocked(col.date)) { <svg lucideLock [size]="12" aria-label="abgeschlossen"></svg> }
+                  {{ col.label }}
+                </div>
                 <div class="grid-bg" [attr.data-date]="col.date" [style.height.px]="hourPx() * 24"
                      (mousedown)="onGridMouseDown($event, col.date)"
                      (touchstart)="onGridTouchStart($event, col.date)">
@@ -151,9 +158,11 @@ type Interact =
                       @if (b.height > 22) {
                         <div class="b-dur mono">{{ b.entry.durationSeconds | duration: 'HH:MM' }}</div>
                       }
-                      <div class="resize-handle"
-                           (mousedown)="onResizeMouseDown($event, b.entry, col.date)"
-                           (touchstart)="onResizeTouchStart($event, b.entry, col.date)"></div>
+                      @if (!isLocked(b.entry.entryDate)) {
+                        <div class="resize-handle"
+                             (mousedown)="onResizeMouseDown($event, b.entry, col.date)"
+                             (touchstart)="onResizeTouchStart($event, b.entry, col.date)"></div>
+                      }
                     </div>
                   }
                 </div>
@@ -169,7 +178,7 @@ type Interact =
       <div class="dialog-backdrop" (click)="closeDialog()">
         <div class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
-            <h3>{{ editingId() ? 'Eintrag bearbeiten' : 'Neuer Eintrag' }}</h3>
+            <h3>{{ formLocked() ? 'Eintrag (abgeschlossen)' : editingId() ? 'Eintrag bearbeiten' : 'Neuer Eintrag' }}</h3>
             <button class="btn btn-ghost btn-icon" (click)="closeDialog()" aria-label="Schließen"><svg lucideX></svg></button>
           </div>
           <div class="dialog-body">
@@ -230,13 +239,20 @@ type Interact =
             </label>
           </div>
           <div class="dialog-footer">
-            @if (editingId()) {
-              <button class="btn btn-danger" style="margin-right: auto"
-                      (click)="removeEntry()">Löschen</button>
+            @if (formLocked()) {
+              <span class="faint row gap-2" style="margin-right: auto">
+                <svg lucideLock [size]="14"></svg> Monat abgeschlossen – nur lesend
+              </span>
+              <button class="btn" (click)="closeDialog()">Schließen</button>
+            } @else {
+              @if (editingId()) {
+                <button class="btn btn-danger" style="margin-right: auto"
+                        (click)="removeEntry()">Löschen</button>
+              }
+              <button class="btn" (click)="closeDialog()">Abbrechen</button>
+              <button class="btn btn-primary" (click)="saveEntry()"
+                      [disabled]="!form.projectId">Speichern</button>
             }
-            <button class="btn" (click)="closeDialog()">Abbrechen</button>
-            <button class="btn btn-primary" (click)="saveEntry()"
-                    [disabled]="!form.projectId">Speichern</button>
           </div>
         </div>
       </div>
@@ -257,6 +273,8 @@ type Interact =
     .hours { width: 52px; flex-shrink: 0; position: sticky; left: 0; z-index: 6; background: var(--surface); }
     .day { flex: 1; border-left: 1px solid var(--border); min-width: 0; }
     .today-col { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+    .locked-col .grid-bg { cursor: default; background: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--text) 3%, transparent) 8px 16px); }
+    .locked-col .hd { color: var(--text-muted); }
     .hd { height: 36px; display: flex; align-items: center; justify-content: center;
           font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--border);
           position: sticky; top: 0; background: var(--surface); z-index: 5; }
@@ -343,6 +361,16 @@ export class CalendarComponent implements OnDestroy {
   protected readonly allTags = signal<Tag[]>([]);
   protected readonly showDialog = signal(false);
   protected readonly editingId = signal<string | null>(null);
+  private readonly lockState = inject(MonthLockStateService);
+
+  protected isLocked(date: string): boolean {
+    return this.lockState.isLocked(date);
+  }
+
+  /** The open dialog shows an entry of a closed month: read-only. */
+  protected formLocked(): boolean {
+    return !!this.editingId() && this.isLocked(this.formDate);
+  }
 
   protected form: TimeEntryInput = this.emptyForm();
   protected formDate = '';
@@ -528,7 +556,7 @@ export class CalendarComponent implements OnDestroy {
   // ─── Pointer interaction (mouse + touch) ────────────────────────────────────
 
   protected onGridMouseDown(e: MouseEvent, date: string): void {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || this.isLocked(date)) return;
     e.preventDefault();
     const hit = this.hitTest(e.clientX, e.clientY);
     const anchorMin = Math.min(DAY_MIN - SNAP_MIN, this.snapDown(hit?.minutes ?? 0));
@@ -542,6 +570,11 @@ export class CalendarComponent implements OnDestroy {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    // Entries of a closed month cannot be moved; a click only opens the read-only dialog.
+    if (this.isLocked(entry.entryDate)) {
+      this.editEntry(entry);
+      return;
+    }
     this.begin(this.moveInteract(entry, e.clientY), e.clientX, e.clientY, false);
   }
 
@@ -554,6 +587,7 @@ export class CalendarComponent implements OnDestroy {
 
   /** Grid tap → open create dialog at tapped time; grid swipe → let browser scroll. */
   protected onGridTouchStart(e: TouchEvent, date: string): void {
+    if (this.isLocked(date)) return;
     const touch = e.changedTouches[0];
     const startX = touch.clientX;
     const startY = touch.clientY;
@@ -578,6 +612,10 @@ export class CalendarComponent implements OnDestroy {
   protected onBlockTouchStart(e: TouchEvent, entry: TimeEntry): void {
     e.preventDefault();
     e.stopPropagation();
+    if (this.isLocked(entry.entryDate)) {
+      this.editEntry(entry);
+      return;
+    }
     const t = e.changedTouches[0];
     this.begin(this.moveInteract(entry, t.clientY), t.clientX, t.clientY, true);
   }
