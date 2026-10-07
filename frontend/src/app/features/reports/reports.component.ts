@@ -54,7 +54,7 @@ type DetailRow =
 @Component({
   selector: 'app-reports',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, BarChartComponent, LineChartComponent, DateRangePickerComponent, ReportDonutComponent, LucideChevronLeft, LucideChevronRight],
+  imports: [FormsModule, DecimalPipe, DurationPipe, MoneyPipe, LineChartComponent, DateRangePickerComponent, ReportDonutComponent, LucideChevronLeft, LucideChevronRight],
   template: `
     <div class="page">
       <div class="page-header"><h1>Reports</h1></div>
