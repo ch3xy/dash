@@ -37,7 +37,7 @@ const DAY_MIN = 24 * 60;
 /** Default zoom: this hour range fills the visible grid height. */
 const FIT_FROM = 7;
 const FIT_TO = 18;
-const HEADER_PX = 36;
+const HEADER_PX = 48;
 const MIN_HOUR_PX = 24;
 const ZOOM_STEP = 1.25;
 const MIN_ZOOM = 0.5;
@@ -57,6 +57,7 @@ interface Block {
 interface DayColumn {
   date: string;
   label: string;
+  totalSeconds: number;
   blocks: Block[];
 }
 
@@ -107,8 +108,11 @@ type Interact =
             @for (col of columns(); track col.date) {
               <div class="day" [class.today-col]="col.date === todayIso" [class.locked-col]="isLocked(col.date)">
                 <div class="hd" [class.today-hd]="col.date === todayIso">
-                  @if (isLocked(col.date)) { <svg lucideLock [size]="12" aria-label="abgeschlossen"></svg> }
-                  {{ col.label }}
+                  <div class="hd-date">
+                    @if (isLocked(col.date)) { <svg lucideLock [size]="12" aria-label="abgeschlossen"></svg> }
+                    {{ col.label }}
+                  </div>
+                  <div class="hd-total mono">{{ col.totalSeconds | duration: 'HH:MM' }}</div>
                 </div>
                 <div class="grid-bg" [attr.data-date]="col.date" [style.height.px]="hourPx() * 24"
                      (mousedown)="onGridMouseDown($event, col.date)"
@@ -133,6 +137,7 @@ type Interact =
                          [style.top.px]="g.top"
                          [style.height.px]="g.height">
                       <span class="mono ghost-label">{{ g.label }}</span>
+                      <span class="mono ghost-dur">{{ g.durationSeconds | duration: 'HH:MM' }}</span>
                     </div>
                   }
 
@@ -155,7 +160,7 @@ type Interact =
                       @if (b.entry.description && b.height > 30) {
                         <div class="b-desc">{{ b.entry.description }}</div>
                       }
-                      @if (b.height > 22) {
+                      @if (b.height > 34) {
                         <div class="b-dur mono">{{ b.entry.durationSeconds | duration: 'HH:MM' }}</div>
                       }
                       @if (!isLocked(b.entry.entryDate)) {
@@ -275,11 +280,13 @@ type Interact =
     .today-col { background: color-mix(in srgb, var(--brand) 4%, transparent); }
     .locked-col .grid-bg { cursor: default; background: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--text) 3%, transparent) 8px 16px); }
     .locked-col .hd { color: var(--text-muted); }
-    .hd { height: 36px; display: flex; align-items: center; justify-content: center;
+    .hd { height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center;
           font-size: var(--fs-sm); font-weight: 600; border-bottom: 1px solid var(--border);
           position: sticky; top: 0; background: var(--surface); z-index: 5; }
     .hours .hd { z-index: 7; }
     .today-hd { color: var(--brand); font-weight: 700; }
+    .hd-date { display: flex; align-items: center; gap: 4px; }
+    .hd-total { margin-top: 4px; font-size: var(--fs-xs); font-weight: 500; color: var(--text-muted); }
     .hour-label { font-size: var(--fs-xs); color: var(--text-faint); text-align: right;
                   padding-right: var(--sp-2); box-sizing: border-box; transform: translateY(-0.6em); }
     .hours .hour-label:nth-child(2) { transform: none; }
@@ -297,7 +304,7 @@ type Interact =
     .block-dim { opacity: 0.35; pointer-events: none; }
     .b-proj { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
     .b-desc { color: var(--text-muted); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-    .b-dur  { color: var(--text-muted); }
+    .b-dur  { position: absolute; right: 4px; bottom: 2px; color: var(--text-muted); pointer-events: none; }
     .resize-handle { position: absolute; bottom: 0; left: 0; right: 0; height: 8px;
                      cursor: ns-resize; display: flex; align-items: center; justify-content: center; }
     .resize-handle::after { content: ''; width: 20px; height: 2px; background: currentColor; opacity: 0.3; border-radius: 1px; }
@@ -306,6 +313,7 @@ type Interact =
                    border: 2px dashed var(--brand); border-radius: var(--radius-sm);
                    pointer-events: none; padding: 2px 4px; box-sizing: border-box; }
     .ghost-label { font-size: var(--fs-xs); font-weight: 600; color: var(--brand); }
+    .ghost-dur { position: absolute; right: 4px; bottom: 2px; font-size: var(--fs-xs); font-weight: 600; color: var(--brand); }
   `],
 })
 export class CalendarComponent implements OnDestroy {
@@ -393,6 +401,7 @@ export class CalendarComponent implements OnDestroy {
       cols.push({
         date: iso,
         label: date.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+        totalSeconds: raw.reduce((sum, r) => sum + r.entry.durationSeconds, 0),
         blocks: this.layoutBlocks(raw, hourPx),
       });
     }
@@ -540,7 +549,7 @@ export class CalendarComponent implements OnDestroy {
 
   // ─── Ghost block ───────────────────────────────────────────────────────────
 
-  protected ghostForCol(colDate: string): { top: number; height: number; label: string } | null {
+  protected ghostForCol(colDate: string): { top: number; height: number; label: string; durationSeconds: number } | null {
     const ix = this.interact();
     if (!ix || !ix.active || ix.colDate !== colDate) return null;
     const startMin = ix.startMin;
@@ -550,6 +559,7 @@ export class CalendarComponent implements OnDestroy {
       top: (startMin / 60) * hourPx,
       height: Math.max(hourPx * 0.25, ((endMin - startMin) / 60) * hourPx),
       label: `${this.minutesToTime(startMin)} – ${this.minutesToTime(endMin)}`,
+      durationSeconds: (endMin - startMin) * 60,
     };
   }
 
