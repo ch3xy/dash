@@ -1,21 +1,23 @@
+import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { ClientApiService } from '../../core/api/client-api.service';
+import { Router, RouterLink } from '@angular/router';
 import { ProjectApiService } from '../../core/api/project-api.service';
-import { Client, PROJECT_STATUS_LABELS, Project, ProjectInput, ProjectStatus } from '../../core/models';
-import { ToastService } from '../../core/toast.service';
+import { ReportApiService } from '../../core/api/report-api.service';
+import { BudgetReportRow, PROJECT_STATUS_LABELS, Project, ProjectStatus } from '../../core/models';
 import { loadViewSetting, saveViewSetting } from '../../core/view-state';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
-import { LucidePlus, LucideX } from '@lucide/angular';
+import { LucidePlus } from '@lucide/angular';
+import { ProjectFormDialogComponent } from './project-form-dialog.component';
 
 const STATUSES: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'];
 
 @Component({
   selector: 'app-projects',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DurationPipe, MoneyPipe, LucidePlus, LucideX],
+  imports: [FormsModule, RouterLink, DecimalPipe, DurationPipe, MoneyPipe, LucidePlus, ProjectFormDialogComponent],
+  styles: [`.row-link { cursor: pointer; }`],
   template: `
     <div class="page">
       <div class="page-header">
@@ -25,7 +27,7 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'];
             <option [ngValue]="undefined">Alle Status</option>
             @for (s of statuses; track s) { <option [ngValue]="s">{{ statusLabels[s] }}</option> }
           </select>
-          <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Projekt</button>
+          <button class="btn btn-primary" (click)="creating.set(true)"><svg lucidePlus></svg> Projekt</button>
         </div>
       </div>
 
@@ -37,22 +39,30 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'];
         <div class="card" style="overflow-x: auto;">
           <table class="table">
             <thead>
-              <tr><th>Projekt</th><th>Kunde</th><th>Status</th><th>Budget</th><th class="num">Satz</th><th></th></tr>
+              <tr><th>Projekt</th><th>Kunde</th><th>Status</th><th>Budget</th><th class="num">Verbrauch</th><th class="num">Satz</th></tr>
             </thead>
             <tbody>
               @for (p of projects(); track p.id) {
-                <tr>
+                <tr class="row-link" (click)="open(p)">
                   <td>
                     <span class="row gap-2">
                       <span class="badge-dot" [style.background]="p.color || 'var(--brand)'"></span>
-                      <a [routerLink]="['/projects', p.id]"><strong>{{ p.name }}</strong></a>
+                      <a [routerLink]="['/projects', p.id]" (click)="$event.stopPropagation()"><strong>{{ p.name }}</strong></a>
                     </span>
                   </td>
                   <td>{{ p.clientName || '—' }}</td>
                   <td><span class="badge" [class]="statusClass(p.status)">{{ statusLabels[p.status] }}</span></td>
-                  <td>{{ p.hourBudgetMinutes ? (p.hourBudgetMinutes * 60 | duration: 'HH:MM') : '—' }}</td>
+                  @if (budgets()[p.id]; as b) {
+                    <td style="min-width: 160px;">
+                      <div class="mono">{{ b.usedMinutes * 60 | duration: 'HH:MM' }} / {{ p.hourBudgetMinutes! * 60 | duration: 'HH:MM' }}</div>
+                      <div class="progress" [class]="budgetClass(b)"><span [style.width.%]="min(b.usedPercent ?? 0, 100)"></span></div>
+                    </td>
+                    <td class="num"><span class="badge" [class]="budgetClass(b)">{{ b.usedPercent ?? 0 | number: '1.0-0' }}%</span></td>
+                  } @else {
+                    <td class="mono">{{ p.hourBudgetMinutes ? (p.hourBudgetMinutes * 60 | duration: 'HH:MM') : '—' }}</td>
+                    <td class="num faint">—</td>
+                  }
                   <td class="num mono">{{ p.defaultHourlyRate | money: p.currencyCode }}</td>
-                  <td class="text-right"><button class="btn btn-ghost btn-sm" (click)="edit(p)">Bearbeiten</button></td>
                 </tr>
               }
             </tbody>
@@ -61,88 +71,30 @@ const STATUSES: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'];
       }
     </div>
 
-    @if (editing()) {
-      <div class="dialog-backdrop" (click)="close()">
-        <div class="dialog" (click)="$event.stopPropagation()">
-          <div class="dialog-header">
-            <h3>{{ editingId ? 'Projekt bearbeiten' : 'Neues Projekt' }}</h3>
-            <button class="btn btn-ghost btn-icon" (click)="close()" aria-label="Schließen"><svg lucideX></svg></button>
-          </div>
-          <div class="dialog-body">
-            <div class="field"><label>Name *</label><input class="input" [(ngModel)]="form.name" /></div>
-            <div class="form-row">
-              <div class="field">
-                <label>Kunde</label>
-                <select class="select" [(ngModel)]="form.clientId">
-                  <option [ngValue]="null">— Kein Kunde —</option>
-                  @for (c of clients(); track c.id) { <option [ngValue]="c.id">{{ c.name }}</option> }
-                </select>
-              </div>
-              <div class="field" style="max-width: 90px; flex: 0 0 90px;">
-                <label>Farbe</label>
-                <input class="input" type="color" [(ngModel)]="form.color" style="padding: 2px;" />
-              </div>
-            </div>
-            <div class="field"><label>Beschreibung</label><textarea class="textarea" [(ngModel)]="form.description"></textarea></div>
-            <div class="form-row">
-              <div class="field"><label>Std.-Satz</label><input class="input mono" type="number" [(ngModel)]="form.defaultHourlyRate" /></div>
-              <div class="field" style="max-width: 100px;"><label>Währung</label><input class="input mono" [(ngModel)]="form.currencyCode" maxlength="3" /></div>
-            </div>
-            <div class="form-row">
-              <div class="field"><label>Stundenbudget (h)</label><input class="input mono" type="number" [(ngModel)]="budgetHours" /></div>
-              <div class="field"><label>Geldbudget</label><input class="input mono" type="number" [(ngModel)]="form.moneyBudgetAmount" /></div>
-              <div class="field">
-                <label>Budget-Reset</label>
-                <select class="select" [(ngModel)]="form.budgetReset">
-                  <option value="NONE">Keiner</option><option value="MONTHLY">Monatlich</option><option value="YEARLY">Jährlich</option>
-                </select>
-              </div>
-            </div>
-            <label class="switch"><input type="checkbox" [(ngModel)]="form.billableByDefault" /> Standardmäßig abrechenbar</label>
-          </div>
-          <div class="dialog-footer">
-            <button class="btn" (click)="close()">Abbrechen</button>
-            <button class="btn btn-primary" (click)="save()" [disabled]="!form.name?.trim()">Speichern</button>
-          </div>
-        </div>
-      </div>
+    @if (creating()) {
+      <app-project-form-dialog (saved)="onCreated()" (closed)="creating.set(false)" />
     }
   `,
 })
 export class ProjectsComponent {
   private readonly api = inject(ProjectApiService);
-  private readonly clientApi = inject(ClientApiService);
-  private readonly toast = inject(ToastService);
+  private readonly reportApi = inject(ReportApiService);
+  private readonly router = inject(Router);
 
   protected readonly statuses = STATUSES;
   protected readonly statusLabels = PROJECT_STATUS_LABELS;
   protected readonly projects = signal<Project[]>([]);
-  protected readonly clients = signal<Client[]>([]);
   protected readonly loading = signal(true);
-  protected readonly editing = signal(false);
-  protected editingId: string | null = null;
+  protected readonly creating = signal(false);
+  /** projectId -> budget usage in the current budget period (only active projects with an hour budget). */
+  protected readonly budgets = signal<Record<string, BudgetReportRow>>({});
   // A persisted filter may still hold a removed status (PAUSED/COMPLETED); fall back to "all".
   protected statusFilter: ProjectStatus | undefined = STATUSES.find(
     (s) => s === loadViewSetting<string | null>('projects.status', null),
   );
-  protected budgetHours: number | null = null;
-  protected form: ProjectInput = this.empty();
 
   constructor() {
     this.load();
-    this.clientApi.getAll().subscribe((c) => this.clients.set(c));
-  }
-
-  private empty(): ProjectInput {
-    return {
-      name: '',
-      clientId: null,
-      color: '#6366f1',
-      defaultHourlyRate: '0.00',
-      currencyCode: 'EUR',
-      billableByDefault: true,
-      budgetReset: 'NONE',
-    };
   }
 
   load(): void {
@@ -155,53 +107,29 @@ export class ProjectsComponent {
       },
       error: () => this.loading.set(false),
     });
+    this.reportApi.budget({}).subscribe((rows) => {
+      this.budgets.set(Object.fromEntries(rows.map((r) => [r.projectId, r])));
+    });
+  }
+
+  budgetClass(b: BudgetReportRow): string {
+    return b.status === 'EXCEEDED' ? 'danger' : b.status === 'WARNING' ? 'warn' : 'ok';
+  }
+
+  protected min(a: number, b: number): number {
+    return Math.min(a, b);
   }
 
   statusClass(s: ProjectStatus): string {
     return s === 'ACTIVE' ? 'ok' : 'muted';
   }
 
-  openNew(): void {
-    this.form = this.empty();
-    this.budgetHours = null;
-    this.editingId = null;
-    this.editing.set(true);
+  open(p: Project): void {
+    this.router.navigate(['/projects', p.id]);
   }
 
-  edit(p: Project): void {
-    this.form = {
-      name: p.name,
-      clientId: p.clientId,
-      color: p.color,
-      description: p.description,
-      defaultHourlyRate: p.defaultHourlyRate,
-      currencyCode: p.currencyCode,
-      billableByDefault: p.billableByDefault,
-      moneyBudgetAmount: p.moneyBudgetAmount,
-      budgetReset: p.budgetReset,
-    };
-    this.budgetHours = p.hourBudgetMinutes != null ? p.hourBudgetMinutes / 60 : null;
-    this.editingId = p.id;
-    this.editing.set(true);
-  }
-
-  close(): void {
-    this.editing.set(false);
-  }
-
-  save(): void {
-    if (!this.form.name?.trim()) {
-      return;
-    }
-    const payload: ProjectInput = {
-      ...this.form,
-      hourBudgetMinutes: this.budgetHours != null ? Math.round(this.budgetHours * 60) : null,
-    };
-    const req = this.editingId ? this.api.update(this.editingId, payload) : this.api.create(payload);
-    req.subscribe(() => {
-      this.toast.success('Gespeichert');
-      this.close();
-      this.load();
-    });
+  onCreated(): void {
+    this.creating.set(false);
+    this.load();
   }
 }

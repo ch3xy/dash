@@ -1,23 +1,26 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 import { ClientApiService } from '../../core/api/client-api.service';
-import { Client, ClientInput } from '../../core/models';
-import { DialogService } from '../../core/dialog.service';
-import { ToastService } from '../../core/toast.service';
+import { ProjectApiService } from '../../core/api/project-api.service';
+import { Client } from '../../core/models';
 import { loadViewSetting, saveViewSetting } from '../../core/view-state';
-import { LucidePlus, LucideX } from '@lucide/angular';
+import { LucidePlus } from '@lucide/angular';
+import { websiteHref } from '../../shared/utils/url-utils';
+import { ClientFormDialogComponent } from './client-form-dialog.component';
 
 @Component({
   selector: 'app-clients',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, LucidePlus, LucideX],
+  imports: [FormsModule, RouterLink, LucidePlus, ClientFormDialogComponent],
+  styles: [`.row-link { cursor: pointer; }`],
   template: `
     <div class="page">
       <div class="page-header">
         <h1>Kunden</h1>
         <div class="row">
           <label class="switch"><input type="checkbox" [(ngModel)]="showArchived" (ngModelChange)="load()" /> Archivierte</label>
-          <button class="btn btn-primary" (click)="openNew()"><svg lucidePlus></svg> Kunde</button>
+          <button class="btn btn-primary" (click)="creating.set(true)"><svg lucidePlus></svg> Kunde</button>
         </div>
       </div>
 
@@ -29,27 +32,26 @@ import { LucidePlus, LucideX } from '@lucide/angular';
         <div class="card" style="overflow-x: auto;">
           <table class="table">
             <thead>
-              <tr><th>Name</th><th>E-Mail</th><th>Währung</th><th>Status</th><th></th></tr>
+              <tr><th>Name</th><th>E-Mail</th><th>Website</th><th class="num">Projekte</th><th>Währung</th><th>Status</th></tr>
             </thead>
             <tbody>
               @for (c of clients(); track c.id) {
-                <tr>
+                <tr class="row-link" (click)="open(c)">
                   <td>
-                    <strong>{{ c.name }}</strong>
+                    <a [routerLink]="['/clients', c.id]" (click)="$event.stopPropagation()"><strong>{{ c.name }}</strong></a>
                     @if (c.description) { <div class="faint">{{ c.description }}</div> }
                   </td>
                   <td>{{ c.email || '—' }}</td>
+                  <td>
+                    @if (c.website) {
+                      <a [href]="websiteHref(c.website)" target="_blank" rel="noopener" (click)="$event.stopPropagation()">{{ c.website }}</a>
+                    } @else { — }
+                  </td>
+                  <td class="num mono">{{ projectCounts()[c.id] ?? 0 }}</td>
                   <td class="mono">{{ c.currencyCode }}</td>
                   <td>
                     @if (c.archived) { <span class="badge muted">Archiviert</span> }
                     @else { <span class="badge ok">Aktiv</span> }
-                  </td>
-                  <td class="text-right">
-                    <button class="btn btn-ghost btn-sm" (click)="edit(c)">Bearbeiten</button>
-                    @if (!c.archived) {
-                      <button class="btn btn-ghost btn-sm" (click)="archive(c)">Archivieren</button>
-                    }
-                    <button class="btn btn-ghost btn-sm" (click)="remove(c)">Löschen</button>
                   </td>
                 </tr>
               }
@@ -59,53 +61,35 @@ import { LucidePlus, LucideX } from '@lucide/angular';
       }
     </div>
 
-    @if (editing(); as e) {
-      <div class="dialog-backdrop" (click)="close()">
-        <div class="dialog" (click)="$event.stopPropagation()">
-          <div class="dialog-header">
-            <h3>{{ e.id ? 'Kunde bearbeiten' : 'Neuer Kunde' }}</h3>
-            <button class="btn btn-ghost btn-icon" (click)="close()" aria-label="Schließen"><svg lucideX></svg></button>
-          </div>
-          <div class="dialog-body">
-            <div class="field">
-              <label>Name *</label>
-              <input class="input" [(ngModel)]="form.name" />
-            </div>
-            <div class="field">
-              <label>Beschreibung</label>
-              <textarea class="textarea" [(ngModel)]="form.description"></textarea>
-            </div>
-            <div class="form-row">
-              <div class="field"><label>E-Mail</label><input class="input" [(ngModel)]="form.email" /></div>
-              <div class="field"><label>Website</label><input class="input" [(ngModel)]="form.website" /></div>
-            </div>
-            <div class="field" style="max-width: 120px;">
-              <label>Währung</label>
-              <input class="input mono" [(ngModel)]="form.currencyCode" maxlength="3" />
-            </div>
-          </div>
-          <div class="dialog-footer">
-            <button class="btn" (click)="close()">Abbrechen</button>
-            <button class="btn btn-primary" (click)="save()" [disabled]="!form.name?.trim()">Speichern</button>
-          </div>
-        </div>
-      </div>
+    @if (creating()) {
+      <app-client-form-dialog (saved)="onCreated()" (closed)="creating.set(false)" />
     }
   `,
 })
 export class ClientsComponent {
   private readonly api = inject(ClientApiService);
-  private readonly toast = inject(ToastService);
-  private readonly dialog = inject(DialogService);
+  private readonly projectApi = inject(ProjectApiService);
+  private readonly router = inject(Router);
 
   protected readonly clients = signal<Client[]>([]);
   protected readonly loading = signal(true);
-  protected readonly editing = signal<Client | { id: null } | null>(null);
+  protected readonly creating = signal(false);
+  /** clientId -> number of projects (including archived ones) */
+  protected readonly projectCounts = signal<Record<string, number>>({});
+  protected readonly websiteHref = websiteHref;
   protected showArchived = loadViewSetting('clients.showArchived', false);
-  protected form: ClientInput = { name: '', currencyCode: 'EUR' };
 
   constructor() {
     this.load();
+    this.projectApi.getAll({ archived: true }).subscribe((projects) => {
+      const counts: Record<string, number> = {};
+      for (const p of projects) {
+        if (p.clientId) {
+          counts[p.clientId] = (counts[p.clientId] ?? 0) + 1;
+        }
+      }
+      this.projectCounts.set(counts);
+    });
   }
 
   load(): void {
@@ -120,56 +104,12 @@ export class ClientsComponent {
     });
   }
 
-  openNew(): void {
-    this.form = { name: '', description: '', email: '', website: '', currencyCode: 'EUR' };
-    this.editing.set({ id: null });
+  open(c: Client): void {
+    this.router.navigate(['/clients', c.id]);
   }
 
-  edit(c: Client): void {
-    this.form = {
-      name: c.name,
-      description: c.description,
-      email: c.email,
-      website: c.website,
-      currencyCode: c.currencyCode,
-    };
-    this.editing.set(c);
-  }
-
-  close(): void {
-    this.editing.set(null);
-  }
-
-  save(): void {
-    const e = this.editing();
-    if (!e || !this.form.name?.trim()) {
-      return;
-    }
-    const req = e.id ? this.api.update(e.id, this.form) : this.api.create(this.form);
-    req.subscribe(() => {
-      this.toast.success('Gespeichert');
-      this.close();
-      this.load();
-    });
-  }
-
-  archive(c: Client): void {
-    this.api.archive(c.id).subscribe(() => {
-      this.toast.success('Archiviert');
-      this.load();
-    });
-  }
-
-  remove(c: Client): void {
-    this.dialog
-      .confirm({ title: 'Kunde löschen', message: `Kunde „${c.name}" löschen?`, confirmLabel: 'Löschen', danger: true })
-      .then((ok) => {
-        if (ok) {
-          this.api.delete(c.id).subscribe(() => {
-            this.toast.success('Gelöscht');
-            this.load();
-          });
-        }
-      });
+  onCreated(): void {
+    this.creating.set(false);
+    this.load();
   }
 }

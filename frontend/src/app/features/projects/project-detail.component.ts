@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ProjectApiService } from '../../core/api/project-api.service';
@@ -17,14 +17,27 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
-import { LucideArrowLeft, LucidePlus, LucideX } from '@lucide/angular';
+import { LucideArrowLeft, LucidePencil, LucidePlus, LucideX } from '@lucide/angular';
+import { ProjectFormDialogComponent } from './project-form-dialog.component';
 
 type Tab = 'tasks' | 'rates';
 
 @Component({
   selector: 'app-project-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, DecimalPipe, DurationPipe, MoneyPipe, LucideArrowLeft, LucidePlus, LucideX],
+  imports: [
+    FormsModule,
+    RouterLink,
+    DatePipe,
+    DecimalPipe,
+    DurationPipe,
+    MoneyPipe,
+    LucideArrowLeft,
+    LucidePencil,
+    LucidePlus,
+    LucideX,
+    ProjectFormDialogComponent,
+  ],
   template: `
     <div class="page">
       @if (project(); as p) {
@@ -36,9 +49,12 @@ type Tab = 'tasks' | 'rates';
             </h1>
             <div class="muted">{{ p.clientName || 'Kein Kunde' }}</div>
           </div>
-          <select class="select" [ngModel]="p.status" (ngModelChange)="changeStatus($event)">
-            @for (s of statuses; track s) { <option [ngValue]="s">{{ statusLabels[s] }}</option> }
-          </select>
+          <div class="row">
+            <button class="btn" (click)="editingProject.set(true)"><svg lucidePencil></svg> Bearbeiten</button>
+            <select class="select" [ngModel]="p.status" (ngModelChange)="changeStatus($event)">
+              @for (s of statuses; track s) { <option [ngValue]="s">{{ statusLabels[s] }}</option> }
+            </select>
+          </div>
         </div>
 
         @if (budget(); as b) {
@@ -123,6 +139,10 @@ type Tab = 'tasks' | 'rates';
       }
     </div>
 
+    @if (editingProject() && project(); as p) {
+      <app-project-form-dialog [project]="p" [activeRate]="activeRate()" (saved)="onProjectSaved($event)" (closed)="editingProject.set(false)" />
+    }
+
     @if (editingTask(); as t) {
       <div class="dialog-backdrop" (click)="closeTask()">
         <div class="dialog" (click)="$event.stopPropagation()">
@@ -174,6 +194,16 @@ export class ProjectDetailComponent {
   protected readonly tab = signal<Tab>('tasks');
   /** taskId -> tracked seconds over the whole project lifetime */
   protected readonly taskSeconds = signal<Record<string, number>>({});
+  protected readonly editingProject = signal(false);
+  /** Rate-history entry valid right now; it takes precedence over the project's default rate. */
+  protected readonly activeRate = computed(() => {
+    const now = Date.now();
+    return (
+      this.rates().find(
+        (r) => Date.parse(r.validFrom) <= now && (r.validTo == null || Date.parse(r.validTo) > now),
+      ) ?? null
+    );
+  });
   protected readonly editingTask = signal<Task | null>(null);
   protected taskForm: TaskInput & { name: string } = { name: '' };
   protected taskRate: number | null = null;
@@ -230,6 +260,13 @@ export class ProjectDetailComponent {
   budgetClass(b: BudgetStatus): string {
     const pct = b.usedPercent ?? 0;
     return pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : 'ok';
+  }
+
+  onProjectSaved(p: Project): void {
+    this.project.set(p);
+    this.editingProject.set(false);
+    // Budget/currency may have changed.
+    this.api.budgetStatus(this.id()).subscribe((b) => this.budget.set(b));
   }
 
   changeStatus(status: ProjectStatus): void {
