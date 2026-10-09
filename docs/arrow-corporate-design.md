@@ -289,10 +289,12 @@ Desktop-first, tabletfähig. Inhalte haben keine horizontale Seiten-Scrollbar; b
 | Primary Indigo | ✅ | ✅ (`--brand` = Indigo 600/500) | ❌ Blau `#2563eb` → Indigo |
 | Neutralfarben Slate | ✅ | ✅ | ⚠️ eigene Dark-Palette (`#0d1117`, `#121a28`) → Slate |
 | Semantikfarben | ✅ | ✅ (`--ok/-warn/-danger/-info` + `-bg`) | ⚠️ Grün `#22c55e` → `#059669`/`#34D399` |
-| Inter selbst gehostet | ⚠️ lädt Inter von Google Fonts → selbst hosten | ✅ (`@fontsource-variable/inter`) | ❌ |
-| Icons Lucide | ⚠️ Material Icons (optional migrieren) | ✅ | ❌ Unicode-Glyphen → Lucide |
+| Inter selbst gehostet | ✅ seit 2026-10 (`@fontsource-variable/inter`) | ✅ (`@fontsource-variable/inter`) | ❌ |
+| Icons Lucide | ⚠️ Material Symbols Outlined (Strichstärke 300, Lucide-nah; optional migrieren) | ✅ | ❌ Unicode-Glyphen → Lucide |
 | Logo-Set nach Abschnitt 2 | ✅ | ✅ | ❌ anlegen (Beschreibung „cockpit“) |
 | Light + Dark Mode | ✅ | ✅ | ⚠️ nur Dark |
+| Material-Komponenten im dash-Look | ✅ seit 2026-10 (`mat.theme` + `theme-overrides` auf Arrow-Tokens; 38px-Controls, 6px-Radius, Tabellen als Card) | – | – |
+| Einstellungen als Seite (Darstellung: Hell/Dunkel/System) | ✅ `/settings` | ✅ `/settings` | ❌ |
 | Mobil-Breakpoint | 600px | 640px | – |
 
 Bei neuen Arrow-Produkten: Tokens aus Abschnitt 3–5 übernehmen, App-Shell nach Abschnitt 7 bauen,
