@@ -29,6 +29,8 @@ Stand: 2026-10-01
 | Kalender: Zeit-Indikator, Heute-Highlight | ✅ | ✅ |
 | Kalender: Überlappende Einträge nebeneinander | ✅ | ✅ |
 | Kalender: Touch-Support | ✅ | ✅ |
+| Kalender: Tagessummen im Header | ✅ | ✅ |
+| Kalender: Live-Dauer beim Ziehen/Resize | ✅ | ✅ |
 | Kunden-Verwaltung (CRUD) | ✅ | ✅ |
 | Projekt-Verwaltung (CRUD) | ✅ | ✅ |
 | Projekt-Farben (alle Ansichten) | ✅ | ✅ |
