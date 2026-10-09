@@ -27,6 +27,7 @@ import { ThemeService } from './core/theme.service';
 import { DialogHostComponent } from './core/layout/dialog-host.component';
 import { GlobalSearchComponent } from './core/layout/global-search.component';
 import { TimerBarComponent } from './core/layout/timer-bar.component';
+import { ServerDownComponent } from './core/layout/server-down.component';
 import { ToastHostComponent } from './core/layout/toast-host.component';
 
 interface NavItem {
@@ -58,6 +59,7 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
     GlobalSearchComponent,
     ToastHostComponent,
     DialogHostComponent,
+    ServerDownComponent,
     LucideDynamicIcon,
     LucideChevronLeft,
     LucideChevronRight,
@@ -143,6 +145,7 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
     </div>
     <app-toast-host />
     <app-dialog-host />
+    <app-server-down />
   `,
   styles: [`
     .shell { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }

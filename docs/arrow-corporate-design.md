@@ -239,6 +239,7 @@ Kalender) · **Stammdaten** (Kunden, Projekte, Tags) · **Verwaltung** (Monatsab
 | **Ladezustand** | Skeleton-Loader in Form des Inhalts statt Spinner für ganze Seiten |
 | **Leerzustand** | Kurzer Satz, was fehlt, plus direkte Aktion („Noch keine Einträge heute.“ + „Eintrag anlegen“) |
 | **Fehlerzustand** | Verständliche Meldung + „Erneut versuchen“; technische Details nur im Problem-Detail/Log |
+| **Server nicht erreichbar** | Vollflächige Karte (Zeichen + Wortmarke, Titel, Satz, Spinner „Warte auf den Server …“, „Jetzt neu laden“). Erst nach fehlgeschlagenem Health-Check zeigen (kein Aufblitzen bei einzelnen Netzfehlern), Health alle 3 s pollen, bei Rückkehr Seite neu laden (neuer Build nach Deploy). Ist die App beim Aufruf schon down, liefert Caddy dieselbe Karte als Wartungsseite (`pi-ops/stacks/apps/proxy/maintenance`) |
 
 ---
 
