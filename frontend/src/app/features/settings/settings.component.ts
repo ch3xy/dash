@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { SettingsApiService } from '../../core/api/settings-api.service';
 import { AppSettings, RoundingRule } from '../../core/models';
 import { ToastService } from '../../core/toast.service';
+import { THEME_MODE_LABELS, ThemeMode, ThemeService } from '../../core/theme.service';
 
 @Component({
   selector: 'app-settings',
@@ -13,6 +14,17 @@ import { ToastService } from '../../core/toast.service';
   template: `
     <div class="page" style="max-width: 720px;">
       <div class="page-header"><h1>Einstellungen</h1></div>
+
+      <div class="card card-pad" style="margin-bottom: var(--sp-4);">
+        <div class="card-title">Darstellung</div>
+        <div class="field" style="max-width: 240px;">
+          <label>Farbschema</label>
+          <select class="select" [ngModel]="theme.mode()" (ngModelChange)="theme.setMode($event)">
+            @for (m of themeModes; track m) { <option [ngValue]="m">{{ themeModeLabels[m] }}</option> }
+          </select>
+        </div>
+        <div class="faint">Wird sofort übernommen und in diesem Browser gespeichert. „System“ folgt der Einstellung des Betriebssystems.</div>
+      </div>
 
       @if (settings(); as s) {
         <div class="card card-pad">
@@ -49,6 +61,10 @@ import { ToastService } from '../../core/toast.service';
 export class SettingsComponent {
   private readonly api = inject(SettingsApiService);
   private readonly toast = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+
+  protected readonly themeModes: ThemeMode[] = ['light', 'dark', 'system'];
+  protected readonly themeModeLabels = THEME_MODE_LABELS;
 
   protected readonly settings = signal<AppSettings | null>(null);
 

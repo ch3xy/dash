@@ -9,9 +9,18 @@ describe('ThemeService', () => {
     }
   });
 
-  it('initialises without throwing when storage/matchMedia behave', () => {
+  it('defaults to system mode and resolves to light or dark', () => {
     const svc = new ThemeService();
+    expect(svc.mode()).toBe('system');
     expect(['light', 'dark']).toContain(svc.theme());
+  });
+
+  it('pins explicit modes', () => {
+    const svc = new ThemeService();
+    svc.setMode('dark');
+    expect(svc.theme()).toBe('dark');
+    svc.setMode('light');
+    expect(svc.theme()).toBe('light');
   });
 
   it('toggles between light and dark', () => {
@@ -23,11 +32,12 @@ describe('ThemeService', () => {
     expect(svc.theme()).toBe(first);
   });
 
-  it('persists the toggled theme to localStorage when available', () => {
+  it('persists the mode and restores it in a new instance', () => {
     const svc = new ThemeService();
-    svc.toggle();
+    svc.setMode('dark');
     if (globalThis.localStorage) {
-      expect(globalThis.localStorage.getItem('dash-theme')).toBe(svc.theme());
+      expect(globalThis.localStorage.getItem('dash-theme')).toBe('dark');
+      expect(new ThemeService().mode()).toBe('dark');
     }
   });
 });
