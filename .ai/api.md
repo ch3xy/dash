@@ -517,6 +517,26 @@ Umsatz nach Kunde/Projekt/Monat.
 
 `intensity` = `durationSeconds / (8 * 3600)`, max 1.0.
 
+### `GET /reports/forecast`
+
+Gleiche Filter wie `/summary` plus `rounded`. Prognose für die Tage **nach heute** im Zeitraum, befüllt mit den Zeiten von **52 Wochen zuvor** (gleicher Wochentag im Vorjahr, Wochenenden bleiben Wochenenden).
+
+```json
+{
+  "from": "2026-10-21", "to": "2026-10-31",
+  "sourceFrom": "2025-10-22", "sourceTo": "2025-11-01",
+  "totalDurationSeconds": 18000, "billableDurationSeconds": 18000,
+  "revenueAmount": "500.00",
+  "groups": [ { "key": "uuid", "label": "A2", "durationSeconds": 18000, "billableDurationSeconds": 18000, "revenueAmount": "500.00" } ],
+  "days": [ { "date": "2026-10-21", "totalSeconds": 18000, "projects": [ ... ] } ]
+}
+```
+
+- Ohne zukünftigen Anteil: `from`/`to` = null, leere Listen.
+- Aktives Quellprojekt behält seine Zeit; archiviertes → aktuelles Projekt des Kunden (aktives Projekt mit den meisten Stunden der letzten 90 Tage, sonst das neueste). Ohne Ziel fällt die Zeit weg.
+- Umsatz = Vorjahresdauer × **aktueller** Satz des Zielprojekts (ohne Task-Override), nur für abrechenbare Einträge.
+- `groups` verwenden dieselben Keys/Labels wie `/summary` (Frontend merged). Task-Filter → keine Prognose.
+
 ### `GET /reports/export.csv`
 
 Header: `Content-Disposition: attachment; filename="report-2026-06.csv"`  

@@ -4,6 +4,7 @@ import com.ch3xy.dash.common.pagination.PageResponse;
 import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.report.dto.DailyBreakdownResponse;
+import com.ch3xy.dash.report.dto.ForecastResponse;
 import com.ch3xy.dash.report.dto.HeatmapResponse;
 import com.ch3xy.dash.report.dto.SummaryReportResponse;
 import com.ch3xy.dash.report.dto.TrendReportResponse;
@@ -34,13 +35,16 @@ import java.util.UUID;
 public class ReportController {
 
     private final ReportService service;
+    private final ForecastService forecastService;
     private final CsvExportService csvExportService;
     private final XlsxExportService xlsxExportService;
 
     public ReportController(ReportService service,
+                            ForecastService forecastService,
                             CsvExportService csvExportService,
                             XlsxExportService xlsxExportService) {
         this.service = service;
+        this.forecastService = forecastService;
         this.csvExportService = csvExportService;
         this.xlsxExportService = xlsxExportService;
     }
@@ -54,6 +58,17 @@ public class ReportController {
             @ParameterObject FilterParams params,
             @Parameter(description = "Wenn true, werden Dauern gemäß der konfigurierten App-Rundungsregel gerundet (z. B. auf 15 Minuten). Standardmäßig werden Rohdauern verwendet.") @RequestParam(defaultValue = "false") boolean rounded) {
         return ResponseEntity.ok(service.getSummary(params.toFilter(), rounded));
+    }
+
+    @Operation(
+            summary = "Prognose für den zukünftigen Teil des Zeitraums abrufen",
+            description = "Füllt jeden Tag nach heute mit den 52 Wochen zuvor (gleicher Wochentag im Vorjahr) erfassten Zeiten. Zeiten archivierter Projekte werden dem aktuellen Projekt desselben Kunden zugeordnet und mit dessen aktuellem Stundensatz bewertet. Gruppen verwenden dieselben Schlüssel wie der Summary-Report. Ohne zukünftigen Anteil ist die Antwort leer."
+    )
+    @GetMapping("/forecast")
+    public ResponseEntity<ForecastResponse> forecast(
+            @ParameterObject FilterParams params,
+            @Parameter(description = "Wenn true, werden die Vorjahresdauern gemäß der App-Rundungsregel gerundet.") @RequestParam(defaultValue = "false") boolean rounded) {
+        return ResponseEntity.ok(forecastService.getForecast(params.toFilter(), rounded));
     }
 
     @Operation(

@@ -289,6 +289,72 @@ public class ReportQueryRepository {
         return map;
     }
 
+    /**
+     * Tracked time aggregated per (day, project, billable) — and per tag when
+     * {@code byTag} — as the raw material for the forecast. The filter's
+     * projectId/taskId are ignored by the caller (cleared before calling), because
+     * the forecast maps source projects onto today's projects.
+     */
+    public List<ForecastSourceRow> forecastSourceRows(ReportFilter filter, RoundingRule rule, int minutes, boolean byTag) {
+        String dur = durationExpr(rule, minutes);
+        String tagCols = byTag ? "CAST(tg.id AS text)" : "CAST(NULL AS text)";
+        String tagLabel = byTag ? "COALESCE(tg.name, 'No tag')" : "CAST(NULL AS text)";
+        String sql = """
+                SELECT te.entry_date                    AS day,
+                       p.id                             AS project_id,
+                       p.status                         AS project_status,
+                       c.id                             AS client_id,
+                       COALESCE(c.name, 'No client')    AS client_label,
+                       te.billable                      AS billable,
+                       %s                               AS tag_key,
+                       %s                               AS tag_label,
+                       SUM(%s)                          AS total_seconds
+                FROM time_entries te
+                JOIN projects p ON p.id = te.project_id
+                LEFT JOIN clients c ON c.id = p.client_id
+                LEFT JOIN tasks t ON t.id = te.task_id
+                %s
+                WHERE %s
+                GROUP BY day, p.id, p.status, c.id, c.name, te.billable, tag_key, tag_label
+                """.formatted(tagCols, tagLabel, dur, byTag ? tagJoin(GroupBy.TAG) : "", whereClause());
+        return jdbc.query(sql, params(filter), (rs, rowNum) -> new ForecastSourceRow(
+                rs.getObject("day", LocalDate.class),
+                rs.getObject("project_id", java.util.UUID.class),
+                rs.getString("project_status"),
+                rs.getObject("client_id", java.util.UUID.class),
+                rs.getString("client_label"),
+                rs.getBoolean("billable"),
+                rs.getString("tag_key"),
+                rs.getString("tag_label"),
+                rs.getLong("total_seconds")
+        ));
+    }
+
+    public record ForecastSourceRow(LocalDate day, java.util.UUID projectId, String projectStatus,
+                                    java.util.UUID clientId, String clientLabel, boolean billable,
+                                    String tagKey, String tagLabel, long seconds) {}
+
+    /**
+     * The "current" project of each client: the active project with the most
+     * tracked time since {@code since}, ties (and clients without recent time)
+     * broken by the most recently created project.
+     */
+    public Map<java.util.UUID, java.util.UUID> currentProjectByClient(LocalDate since) {
+        String sql = """
+                SELECT DISTINCT ON (p.client_id) p.client_id, p.id AS project_id
+                FROM projects p
+                LEFT JOIN time_entries te ON te.project_id = p.id AND te.entry_date >= CAST(:since AS date)
+                WHERE p.status = 'ACTIVE' AND p.client_id IS NOT NULL
+                GROUP BY p.client_id, p.id, p.created_at
+                ORDER BY p.client_id, COALESCE(SUM(te.duration_seconds), 0) DESC, p.created_at DESC
+                """;
+        var map = new java.util.HashMap<java.util.UUID, java.util.UUID>();
+        jdbc.query(sql, new MapSqlParameterSource("since", since), rs -> {
+            map.put(rs.getObject("client_id", java.util.UUID.class), rs.getObject("project_id", java.util.UUID.class));
+        });
+        return map;
+    }
+
     private String whereClause() {
         // Each nullable filter is wrapped in an explicit CAST so PostgreSQL can
         // determine the parameter type even when the bound value is NULL.

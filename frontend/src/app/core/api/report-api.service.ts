@@ -5,6 +5,7 @@ import {
   AttendanceReport,
   BudgetReportRow,
   DailyBreakdown,
+  ForecastReport,
   HeatmapReport,
   IsoDate,
   PageResponse,
@@ -54,6 +55,12 @@ export class ReportApiService {
 
   dailyBreakdown(filter: ReportFilter): Observable<DailyBreakdown> {
     return this.http.get<DailyBreakdown>('/reports/daily-breakdown', {
+      params: toParams(filter as Record<string, unknown>),
+    });
+  }
+
+  forecast(filter: ReportFilter): Observable<ForecastReport> {
+    return this.http.get<ForecastReport>('/reports/forecast', {
       params: toParams(filter as Record<string, unknown>),
     });
   }

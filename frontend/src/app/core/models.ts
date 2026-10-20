@@ -215,6 +215,8 @@ export interface ReportFilter {
   q?: string;
   groupBy?: GroupBy;
   rounded?: boolean;
+  /** UI-only: show the forecast for the future part of the range. */
+  forecast?: boolean;
 }
 
 export interface SummaryGroup {
@@ -286,6 +288,19 @@ export interface DailyBreakdownDay {
 }
 
 export interface DailyBreakdown {
+  days: DailyBreakdownDay[];
+}
+
+/** Forecast for the days after today, filled from the same weekday last year (52 weeks earlier). */
+export interface ForecastReport {
+  from: IsoDate | null;
+  to: IsoDate | null;
+  sourceFrom: IsoDate | null;
+  sourceTo: IsoDate | null;
+  totalDurationSeconds: number;
+  billableDurationSeconds: number;
+  revenueAmount: string;
+  groups: SummaryGroup[];
   days: DailyBreakdownDay[];
 }
 

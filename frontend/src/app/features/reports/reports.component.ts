@@ -21,6 +21,7 @@ import {
   ReportFilter,
   DailyBreakdown,
   DailyBreakdownDay,
+  ForecastReport,
   SummaryGroup,
   SummaryReport,
   Tag,
@@ -46,6 +47,12 @@ const CHART_PALETTE = [
   '#6366f1', '#f97316', '#22c55e', '#eab308', '#ec4899',
   '#14b8a6', '#8b5cf6', '#ef4444', '#3b82f6', '#f59e0b',
 ];
+
+/** A summary group plus its forecast counterpart (forecast-only groups have zero actuals). */
+interface OverviewRow { g: SummaryGroup; fc: SummaryGroup | null }
+
+/** A day of the bar chart: actual segments plus forecast segments. */
+type ChartDay = DailyBreakdownDay & { forecastSeconds: number; forecastProjects: DailyBreakdownDay['projects'] };
 
 type DetailRow =
   | { kind: 'header'; label: string }
@@ -136,6 +143,13 @@ type DetailRow =
         <label class="switch" style="align-self: flex-end; height: 38px;">
           <input type="checkbox" [ngModel]="f().rounded === true" (ngModelChange)="patch({ rounded: $event })" /> Gerundet
         </label>
+        @if (view() === 'uebersicht') {
+          <label class="switch" style="align-self: flex-end; height: 38px;" [class.disabled]="!hasFuture()"
+                 [title]="hasFuture() ? 'Künftige Tage mit den Zeiten vom gleichen Wochentag im Vorjahr (52 Wochen zuvor) füllen' : 'Nur für Zeiträume mit zukünftigem Anteil'">
+            <input type="checkbox" [disabled]="!hasFuture()" [ngModel]="f().forecast === true && hasFuture()"
+                   (ngModelChange)="patch({ forecast: $event || undefined })" /> Prognose
+          </label>
+        }
 
       </div>
 
@@ -145,33 +159,49 @@ type DetailRow =
       <!-- Summary cards -->
       @if (summary(); as s) {
         <div class="grid grid-cards mt-4">
-          <div class="card card-pad"><div class="card-title">Gesamt</div><div class="stat-value">{{ s.totalDurationSeconds | duration: 'HH:MM' }}</div></div>
-          <div class="card card-pad"><div class="card-title">Abrechenbar</div><div class="stat-value">{{ s.billableDurationSeconds | duration: 'HH:MM' }}</div></div>
-          <div class="card card-pad"><div class="card-title">Billable-Quote</div><div class="stat-value">{{ s.billableRatio * 100 | number: '1.0-0' }}%</div></div>
-          <div class="card card-pad"><div class="card-title">Umsatz</div><div class="stat-value mono">{{ s.revenueAmount | money: s.currencyCode }}</div></div>
+          <div class="card card-pad"><div class="card-title">Gesamt</div><div class="stat-value">{{ s.totalDurationSeconds | duration: 'HH:MM' }}</div>
+            @if (forecast(); as fc) { <div class="stat-forecast">Prognose {{ s.totalDurationSeconds + fc.totalDurationSeconds | duration: 'HH:MM' }}</div> }
+          </div>
+          <div class="card card-pad"><div class="card-title">Abrechenbar</div><div class="stat-value">{{ s.billableDurationSeconds | duration: 'HH:MM' }}</div>
+            @if (forecast(); as fc) { <div class="stat-forecast">Prognose {{ s.billableDurationSeconds + fc.billableDurationSeconds | duration: 'HH:MM' }}</div> }
+          </div>
+          <div class="card card-pad"><div class="card-title">Billable-Quote</div><div class="stat-value">{{ s.billableRatio * 100 | number: '1.0-0' }}%</div>
+            @if (forecast(); as fc) { <div class="stat-forecast">Prognose {{ forecastRatio(s, fc) * 100 | number: '1.0-0' }}%</div> }
+          </div>
+          <div class="card card-pad"><div class="card-title">Umsatz</div><div class="stat-value mono">{{ s.revenueAmount | money: s.currencyCode }}</div>
+            @if (forecast(); as fc) { <div class="stat-forecast mono">Prognose {{ sum(s.revenueAmount, fc.revenueAmount) | money: s.currencyCode }}</div> }
+          </div>
         </div>
+        @if (forecast(); as fc) {
+          @if (fc.from) {
+            <div class="fc-note muted">
+              Prognose für {{ shortDate(fc.from) }}–{{ shortDate(fc.to!) }} aus den Zeiten von {{ shortDate(fc.sourceFrom!, true) }}–{{ shortDate(fc.sourceTo!, true) }} (52 Wochen zuvor),
+              archivierte Projekte dem aktuellen Projekt des Kunden zugeordnet und zum aktuellen Stundensatz bewertet.
+            </div>
+          }
+        }
 
         <!-- Clockify-style overview: daily bars + project table + donut -->
         <div class="card mt-4 ov-card">
           <!-- Daily bar chart (stacked by project) -->
-          @if (dailyBreakdown(); as db) {
+          @if (chartDays(); as days) {
             <div class="ov-bars-wrap card-pad" style="border-bottom: 1px solid var(--border)">
               <div class="ov-bars">
-                @for (day of db.days; track day.date) {
-                  <div class="ov-bar-col" [class.ov-bar-col-zero]="day.totalSeconds === 0">
-                    @if (db.days.length <= 14) {
-                      <div class="ov-bar-label-top">
-                        @if (day.totalSeconds > 0) { {{ day.totalSeconds | duration: 'HH:MM' }} }
+                @for (day of days; track day.date) {
+                  <div class="ov-bar-col" [class.ov-bar-col-zero]="day.totalSeconds + day.forecastSeconds === 0">
+                    @if (days.length <= 14) {
+                      <div class="ov-bar-label-top" [class.fc-label]="day.forecastSeconds > 0">
+                        @if (day.totalSeconds + day.forecastSeconds > 0) { {{ day.totalSeconds + day.forecastSeconds | duration: 'HH:MM' }} }
                         @else { <span class="faint">—</span> }
                       </div>
                     } @else {
                       <div class="ov-bar-label-top"></div>
                     }
                     <div class="ov-bar-track">
-                      <!-- Stacked segments, bottom to top = projects ordered by seconds desc -->
-                      @if (day.totalSeconds > 0) {
+                      <!-- Stacked segments, bottom to top = projects ordered by seconds desc, forecast on top -->
+                      @if (day.totalSeconds + day.forecastSeconds > 0) {
                         <div class="ov-bar-stack"
-                             [style.height.%]="dayBarPct(day.totalSeconds, db)"
+                             [style.height.%]="dayBarPct(day.totalSeconds + day.forecastSeconds, days)"
                              [title]="barTooltip(day)">
                           @for (seg of day.projects; track seg.projectId) {
                             <div class="ov-bar-segment"
@@ -179,10 +209,16 @@ type DetailRow =
                                  [style.background]="segColor(seg)">
                             </div>
                           }
+                          @for (seg of day.forecastProjects; track seg.projectId) {
+                            <div class="ov-bar-segment ov-bar-segment-fc"
+                                 [style.flex]="seg.durationSeconds"
+                                 [style.background-color]="segColor(seg)">
+                            </div>
+                          }
                         </div>
                       }
                     </div>
-                    <div class="ov-bar-label-bottom">{{ dayLabel(day.date, db.days.length) }}</div>
+                    <div class="ov-bar-label-bottom">{{ dayLabel(day.date, days.length) }}</div>
                   </div>
                 }
               </div>
@@ -198,10 +234,15 @@ type DetailRow =
                     <th>{{ s.groupedBy === 'PROJECT' ? 'Projekt' : s.groupedBy }}</th>
                     <th class="num">Dauer</th>
                     <th class="num">Umsatz</th>
+                    @if (forecast()) {
+                      <th class="num">Dauer Prognose</th>
+                      <th class="num">Umsatz Prognose</th>
+                    }
                   </tr>
                 </thead>
                 <tbody>
-                  @for (g of s.groups; track g.key; let i = $index) {
+                  @for (row of overviewRows(); track row.g.key; let i = $index) {
+                    @let g = row.g;
                     <tr class="ov-group-row"
                         [class.clickable]="drillable(s)"
                         (click)="drillable(s) && drillDown(s, { label: g.label, value: g.durationSeconds, key: g.key })">
@@ -215,20 +256,24 @@ type DetailRow =
                       </td>
                       <td class="num mono">{{ g.durationSeconds | duration: 'HH:MM' }}</td>
                       <td class="num mono faint">{{ g.revenueAmount | money: s.currencyCode }}</td>
+                      @if (forecast()) {
+                        <td class="num mono fc-cell">{{ g.durationSeconds + (row.fc?.durationSeconds ?? 0) | duration: 'HH:MM' }}</td>
+                        <td class="num mono fc-cell">{{ sum(g.revenueAmount, row.fc?.revenueAmount) | money: s.currencyCode }}</td>
+                      }
                     </tr>
                   } @empty {
-                    <tr><td colspan="4" class="faint" style="text-align:center">Keine Daten</td></tr>
+                    <tr><td [attr.colspan]="forecast() ? 6 : 4" class="faint" style="text-align:center">Keine Daten</td></tr>
                   }
                 </tbody>
               </table>
             </div>
             <div class="ov-donut">
               <app-report-donut
-                [segments]="donutSegments(s)"
-                [centerLabel]="s.totalDurationSeconds | duration: 'HH:MM'"
-                centerSub="Gesamt" />
+                [segments]="donutSegments()"
+                [centerLabel]="s.totalDurationSeconds + (forecast()?.totalDurationSeconds ?? 0) | duration: 'HH:MM'"
+                [centerSub]="forecast() ? 'Prognose' : 'Gesamt'" />
               <div class="ov-legend">
-                @for (seg of donutSegments(s); track seg.label) {
+                @for (seg of donutSegments(); track seg.label) {
                   <div class="ov-legend-row">
                     <span class="ov-dot" [style.background]="seg.color"></span>
                     <span class="ov-legend-label">{{ seg.label }}</span>
@@ -436,6 +481,13 @@ type DetailRow =
     .ov-bar-track { flex: 1; width: 64%; display: flex; align-items: flex-end; }
     .ov-bar-stack { width: 100%; display: flex; flex-direction: column-reverse; border-radius: var(--radius-sm) var(--radius-sm) 0 0; overflow: hidden; transition: height 0.3s; min-height: 2px; }
     .ov-bar-segment { width: 100%; min-height: 2px; transition: flex 0.3s; }
+    /* Forecast: lighter, hatched version of the project colour */
+    .ov-bar-segment-fc { opacity: 0.45; background-image: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb, var(--surface) 55%, transparent) 3px 6px); }
+    .fc-label { color: var(--text-muted); font-style: italic; }
+    .stat-forecast { margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--text-muted); font-style: italic; }
+    .fc-cell { color: var(--text-muted); font-style: italic; }
+    .fc-note { margin-top: var(--sp-2); font-size: var(--fs-xs); }
+    .switch.disabled { opacity: 0.5; cursor: not-allowed; }
     .ov-bar-label-bottom { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 6px; text-align: center; white-space: nowrap; }
     .ov-bottom { display: flex; gap: 0; align-items: flex-start; border-top: none; }
     .ov-table { flex: 1; min-width: 0; overflow-x: auto; }
@@ -538,6 +590,36 @@ export class ReportsComponent {
     return rows;
   });
   protected readonly dailyBreakdown = signal<DailyBreakdown | null>(null);
+  /** Forecast for the future part of the range; null when switched off or nothing is in the future. */
+  protected readonly forecast = signal<ForecastReport | null>(null);
+  private readonly today = toIsoDate(new Date());
+  protected readonly hasFuture = computed(() => this.range().to > this.today);
+
+  protected readonly chartDays = computed<ChartDay[] | null>(() => {
+    const db = this.dailyBreakdown();
+    if (!db) return null;
+    const fcDays = new Map((this.forecast()?.days ?? []).map((d) => [d.date, d]));
+    return db.days.map((d) => {
+      const fd = fcDays.get(d.date);
+      return { ...d, forecastSeconds: fd?.totalSeconds ?? 0, forecastProjects: fd?.projects ?? [] };
+    });
+  });
+
+  /** Summary groups merged with forecast groups; forecast-only groups are appended. */
+  protected readonly overviewRows = computed<OverviewRow[]>(() => {
+    const s = this.summary();
+    if (!s) return [];
+    const fc = this.forecast();
+    const fcByKey = new Map((fc?.groups ?? []).map((g) => [g.key, g]));
+    const rows: OverviewRow[] = s.groups.map((g) => ({ g, fc: fcByKey.get(g.key) ?? null }));
+    const known = new Set(s.groups.map((g) => g.key));
+    for (const g of fc?.groups ?? []) {
+      if (!known.has(g.key)) {
+        rows.push({ g: { ...g, durationSeconds: 0, billableDurationSeconds: 0, revenueAmount: '0.00' }, fc: g });
+      }
+    }
+    return rows;
+  });
   protected readonly attendance = signal<AttendanceReport | null>(null);
   protected readonly heatmap = signal<HeatmapReport | null>(null);
   protected readonly heatmapYear = signal(new Date().getFullYear());
@@ -663,6 +745,7 @@ export class ReportsComponent {
       billable: p['billable'] === undefined ? undefined : p['billable'] === 'true',
       groupBy: (p['groupBy'] as GroupBy) ?? 'PROJECT',
       rounded: p['rounded'] === 'true' ? true : undefined,
+      forecast: p['forecast'] === 'true' ? true : undefined,
     };
   }
 
@@ -679,6 +762,11 @@ export class ReportsComponent {
     this.reportApi.budget(filter).subscribe((b) => this.budget.set(b));
     this.reportApi.attendance(filter.from, filter.to).subscribe((a) => this.attendance.set(a));
     this.reportApi.dailyBreakdown(filter).subscribe((b) => this.dailyBreakdown.set(b));
+    if (filter.forecast && (filter.to ?? '') > this.today) {
+      this.reportApi.forecast(filter).subscribe((fc) => this.forecast.set(fc));
+    } else {
+      this.forecast.set(null);
+    }
     this.loadDetailed(filter);
   }
 
@@ -727,15 +815,34 @@ export class ReportsComponent {
     }
   }
 
-  donutSegments(s: SummaryReport): DonutSegment[] {
-    const total = s.totalDurationSeconds;
+  /** Donut over the overview rows; with forecast on, each slice is actual + forecast. */
+  donutSegments(): DonutSegment[] {
+    const rows = this.overviewRows();
+    const seconds = (r: OverviewRow) => r.g.durationSeconds + (r.fc?.durationSeconds ?? 0);
+    const total = rows.reduce((acc, r) => acc + seconds(r), 0);
     if (total === 0) return [];
-    return s.groups.map((g, i) => ({
-      label: g.label,
-      display: new DurationPipe().transform(g.durationSeconds, 'HH:MM'),
-      color: this.groupColor(g, i),
-      fraction: g.durationSeconds / total,
+    return rows.map((r, i) => ({
+      label: r.g.label,
+      display: new DurationPipe().transform(seconds(r), 'HH:MM'),
+      color: this.groupColor(r.g, i),
+      fraction: seconds(r) / total,
     }));
+  }
+
+  forecastRatio(s: SummaryReport, fc: ForecastReport): number {
+    const total = s.totalDurationSeconds + fc.totalDurationSeconds;
+    return total > 0 ? (s.billableDurationSeconds + fc.billableDurationSeconds) / total : 0;
+  }
+
+  sum(a: string | null | undefined, b: string | null | undefined): number {
+    return Number(a ?? 0) + Number(b ?? 0);
+  }
+
+  shortDate(iso: string, withYear = false): string {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('de-AT', withYear
+      ? { day: '2-digit', month: '2-digit', year: 'numeric' }
+      : { day: '2-digit', month: '2-digit' });
   }
 
   groupColor(g: SummaryGroup, index: number): string {
@@ -753,8 +860,8 @@ export class ReportsComponent {
     return this.clients().find((c) => c.id === proj.clientId)?.name ?? null;
   }
 
-  dayBarPct(totalSeconds: number, db: DailyBreakdown): number {
-    const max = Math.max(...db.days.map((d) => d.totalSeconds), 1);
+  dayBarPct(totalSeconds: number, days: ChartDay[]): number {
+    const max = Math.max(...days.map((d) => d.totalSeconds + d.forecastSeconds), 1);
     return (totalSeconds / max) * 100;
   }
 
@@ -765,8 +872,12 @@ export class ReportsComponent {
     return CHART_PALETTE[Math.max(0, idx) % CHART_PALETTE.length];
   }
 
-  barTooltip(day: DailyBreakdownDay): string {
-    return day.projects.map((s) => `${s.projectName}: ${new DurationPipe().transform(s.durationSeconds, 'HH:MM')}`).join('\n');
+  barTooltip(day: ChartDay): string {
+    const fmt = (sec: number) => new DurationPipe().transform(sec, 'HH:MM');
+    return [
+      ...day.projects.map((s) => `${s.projectName}: ${fmt(s.durationSeconds)}`),
+      ...day.forecastProjects.map((s) => `${s.projectName} (Prognose): ${fmt(s.durationSeconds)}`),
+    ].join('\n');
   }
 
   dayLabel(period: string, totalDays = 7): string {
