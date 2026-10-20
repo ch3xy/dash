@@ -217,6 +217,8 @@ export interface ReportFilter {
   rounded?: boolean;
   /** UI-only: show the forecast for the future part of the range. */
   forecast?: boolean;
+  /** UI-only: bar chart time axis; unset = automatic by range length. */
+  chart?: 'day' | 'week' | 'month';
 }
 
 export interface SummaryGroup {

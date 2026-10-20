@@ -35,6 +35,10 @@ import { persistQueryParams } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DateRange } from '../../shared/utils/date-range';
 import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
+import {
+  autoGranularity, bucketDays, bucketLabel, bucketTitle, ChartBucket, ChartDay, ChartGranularity, DENSE_CHART_BARS,
+  granularityAllowed, labelVisible,
+} from '../../shared/utils/chart-buckets';
 import { LucideChevronLeft, LucideChevronRight, LucideLock } from '@lucide/angular';
 import { ClosingApiService } from '../../core/api/closing-api.service';
 import { DialogService } from '../../core/dialog.service';
@@ -51,8 +55,12 @@ const CHART_PALETTE = [
 /** A summary group plus its forecast counterpart (forecast-only groups have zero actuals). */
 interface OverviewRow { g: SummaryGroup; fc: SummaryGroup | null }
 
-/** A day of the bar chart: actual segments plus forecast segments. */
-type ChartDay = DailyBreakdownDay & { forecastSeconds: number; forecastProjects: DailyBreakdownDay['projects'] };
+const GRANULARITY_OPTIONS: Array<{ value: ChartGranularity | undefined; label: string }> = [
+  { value: undefined, label: 'Auto' },
+  { value: 'day', label: 'Tag' },
+  { value: 'week', label: 'Woche' },
+  { value: 'month', label: 'Monat' },
+];
 
 type DetailRow =
   | { kind: 'header'; label: string }
@@ -183,12 +191,25 @@ type DetailRow =
 
         <!-- Clockify-style overview: daily bars + project table + donut -->
         <div class="card mt-4 ov-card">
-          <!-- Daily bar chart (stacked by project) -->
-          @if (chartDays(); as days) {
+          <!-- Bar chart (stacked by project), one bar per day/week/month -->
+          @if (chartBuckets(); as days) {
             <div class="ov-bars-wrap card-pad" style="border-bottom: 1px solid var(--border)">
-              <div class="ov-bars">
-                @for (day of days; track day.date) {
-                  <div class="ov-bar-col" [class.ov-bar-col-zero]="day.totalSeconds + day.forecastSeconds === 0">
+              <div class="ov-bars-head">
+                <div class="chart-gran" role="group" aria-label="Zeitachse">
+                  @for (o of granularityOptions; track o.label) {
+                    <button type="button" class="chart-gran-btn"
+                            [class.active]="f().chart === o.value"
+                            [disabled]="!granularityEnabled(o.value)"
+                            [title]="granularityTitle(o.value)"
+                            (click)="patch({ chart: o.value })">{{ o.label }}</button>
+                  }
+                </div>
+              </div>
+              <div class="ov-bars" [class.ov-bars-dense]="days.length > denseBars">
+                @for (day of days; track day.key; let i = $index) {
+                  <div class="ov-bar-col" [class.ov-bar-col-zero]="day.totalSeconds + day.forecastSeconds === 0"
+                       [class.ov-bar-partial]="day.partial" [class.clickable]="granularity() !== 'day'"
+                       (click)="zoomInto(day)">
                     @if (days.length <= 14) {
                       <div class="ov-bar-label-top" [class.fc-label]="day.forecastSeconds > 0">
                         @if (day.totalSeconds + day.forecastSeconds > 0) { {{ day.totalSeconds + day.forecastSeconds | duration: 'HH:MM' }} }
@@ -218,7 +239,7 @@ type DetailRow =
                         </div>
                       }
                     </div>
-                    <div class="ov-bar-label-bottom">{{ dayLabel(day.date, days.length) }}</div>
+                    <div class="ov-bar-label-bottom">{{ barLabel(day, i, days.length) }}</div>
                   </div>
                 }
               </div>
@@ -488,7 +509,20 @@ type DetailRow =
     .fc-cell { color: var(--text-muted); font-style: italic; }
     .fc-note { margin-top: var(--sp-2); font-size: var(--fs-xs); }
     .switch.disabled { opacity: 0.5; cursor: not-allowed; }
-    .ov-bar-label-bottom { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 6px; text-align: center; white-space: nowrap; }
+    .ov-bars-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-3); }
+    .chart-gran { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; gap: 2px; }
+    .chart-gran-btn { padding: 3px 10px; border-radius: calc(var(--radius) - 2px); border: none; background: none; cursor: pointer; font-size: var(--fs-xs); font-weight: 500; color: var(--text-muted); }
+    .chart-gran-btn.active { background: var(--brand); color: #fff; }
+    .chart-gran-btn:hover:not(.active):not(:disabled) { background: var(--hover); color: var(--text); }
+    .chart-gran-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    /* Many bars: narrow columns so a year of weeks fits; sparse labels overflow into empty neighbours */
+    .ov-bars-dense .ov-bar-col { min-width: 12px; }
+    .ov-bars-dense .ov-bar-track { width: 72%; }
+    .ov-bar-col.clickable { cursor: pointer; }
+    .ov-bar-col.clickable:hover .ov-bar-stack { filter: brightness(1.08); }
+    /* Period cut by the range: lower bar is expected, so de-emphasise it */
+    .ov-bar-partial .ov-bar-stack { opacity: 0.7; }
+    .ov-bar-label-bottom { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 6px; text-align: center; white-space: nowrap; height: 16px; line-height: 16px; flex-shrink: 0; }
     .ov-bottom { display: flex; gap: 0; align-items: flex-start; border-top: none; }
     .ov-table { flex: 1; min-width: 0; overflow-x: auto; }
     .ov-table .table td, .ov-table .table th { white-space: nowrap; }
@@ -594,6 +628,20 @@ export class ReportsComponent {
   protected readonly forecast = signal<ForecastReport | null>(null);
   private readonly today = toIsoDate(new Date());
   protected readonly hasFuture = computed(() => this.range().to > this.today);
+
+  protected readonly granularityOptions = GRANULARITY_OPTIONS;
+  protected readonly denseBars = DENSE_CHART_BARS;
+  protected readonly chartDayCount = computed(() => this.chartDays()?.length ?? 0);
+  /** Chosen granularity if it keeps the chart readable, otherwise automatic by range length. */
+  protected readonly granularity = computed<ChartGranularity>(() => {
+    const chosen = this.f().chart;
+    const days = this.chartDayCount();
+    return chosen && granularityAllowed(chosen, days) ? chosen : autoGranularity(days);
+  });
+  protected readonly chartBuckets = computed<ChartBucket[] | null>(() => {
+    const days = this.chartDays();
+    return days ? bucketDays(days, this.granularity()) : null;
+  });
 
   protected readonly chartDays = computed<ChartDay[] | null>(() => {
     const db = this.dailyBreakdown();
@@ -746,6 +794,7 @@ export class ReportsComponent {
       groupBy: (p['groupBy'] as GroupBy) ?? 'PROJECT',
       rounded: p['rounded'] === 'true' ? true : undefined,
       forecast: p['forecast'] === 'true' ? true : undefined,
+      chart: ['day', 'week', 'month'].includes(p['chart']) ? (p['chart'] as ChartGranularity) : undefined,
     };
   }
 
@@ -860,7 +909,7 @@ export class ReportsComponent {
     return this.clients().find((c) => c.id === proj.clientId)?.name ?? null;
   }
 
-  dayBarPct(totalSeconds: number, days: ChartDay[]): number {
+  dayBarPct(totalSeconds: number, days: ChartBucket[]): number {
     const max = Math.max(...days.map((d) => d.totalSeconds + d.forecastSeconds), 1);
     return (totalSeconds / max) * 100;
   }
@@ -872,28 +921,42 @@ export class ReportsComponent {
     return CHART_PALETTE[Math.max(0, idx) % CHART_PALETTE.length];
   }
 
-  barTooltip(day: ChartDay): string {
+  barTooltip(day: ChartBucket): string {
     const fmt = (sec: number) => new DurationPipe().transform(sec, 'HH:MM');
+    const g = this.granularity();
+    const total = day.totalSeconds + day.forecastSeconds;
+    const head = [`${bucketTitle(day, g)}: ${fmt(total)}`];
+    if (g !== 'day' && day.workdays > 0) head.push(`Ø pro Arbeitstag: ${fmt(Math.round(total / day.workdays))}`);
     return [
+      ...head,
+      '',
       ...day.projects.map((s) => `${s.projectName}: ${fmt(s.durationSeconds)}`),
       ...day.forecastProjects.map((s) => `${s.projectName} (Prognose): ${fmt(s.durationSeconds)}`),
     ].join('\n');
   }
 
-  dayLabel(period: string, totalDays = 7): string {
-    if (!period || !period.includes('-')) return period;
-    try {
-      const d = new Date(period + 'T12:00:00');
-      if (totalDays > 14) {
-        // Only day number; mark Mondays with a dot prefix so weeks stay readable
-        const day = d.getDate();
-        const dow = (d.getDay() + 6) % 7; // 0=Mon
-        return dow === 0 ? `·${day}` : String(day);
-      }
-      return d.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' });
-    } catch {
-      return period;
+  barLabel(day: ChartBucket, index: number, barCount: number): string {
+    if (!labelVisible(day, index, this.granularity(), barCount)) return '';
+    const { from, to } = this.range();
+    return bucketLabel(day, this.granularity(), barCount, from.slice(0, 4) !== to.slice(0, 4));
+  }
+
+  granularityEnabled(g: ChartGranularity | undefined): boolean {
+    return !g || granularityAllowed(g, this.chartDayCount());
+  }
+
+  granularityTitle(g: ChartGranularity | undefined): string {
+    if (!g) {
+      const current = { day: 'Tag', week: 'Woche', month: 'Monat' }[autoGranularity(this.chartDayCount())];
+      return `Automatisch nach Zeitraum (aktuell: ${current})`;
     }
+    return this.granularityEnabled(g) ? '' : 'Zu viele Balken für diesen Zeitraum';
+  }
+
+  /** Click on a week/month bar narrows the range to that full period (shown daily again). */
+  zoomInto(day: ChartBucket): void {
+    if (this.granularity() === 'day') return;
+    this.patch({ from: day.periodFrom, to: day.periodTo, chart: undefined });
   }
 
   time(instant: string): string {

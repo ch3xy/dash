@@ -48,3 +48,12 @@ export function formatDayLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   return d.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
+
+/** ISO-8601 calendar week number (weeks start on Monday, week 1 contains Jan 4). */
+export function isoWeek(d: Date): number {
+  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  // Thursday of the current week decides the week's year.
+  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
+  const jan4 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - jan4.getTime()) / 86_400_000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+}
