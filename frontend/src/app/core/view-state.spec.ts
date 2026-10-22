@@ -1,8 +1,10 @@
 import { RANGE_PRESETS, WEEK_PRESETS } from '../shared/utils/date-range';
+import { createMemoryStorage } from '../testing/memory-storage';
 import { decodeViewParams, encodeViewParams, loadViewSetting, saveViewSetting } from './view-state';
 
 describe('view-state', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => vi.stubGlobal('localStorage', createMemoryStorage()));
+  afterEach(() => vi.unstubAllGlobals());
 
   it('stores a preset range relatively and resolves it to current dates', () => {
     const lastMonth = RANGE_PRESETS.find((p) => p.id === 'last-month')!.range(new Date());
