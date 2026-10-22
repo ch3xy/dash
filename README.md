@@ -79,3 +79,9 @@ Ablauf:
 - Browser ruft `/dash/api/v1/clients` auf, weil API-URLs relativ zu `<base href="/dash/">` sind.
 - `handle_path /dash*` strippt `/dash` und leitet an das Backend als `/api/v1/clients` weiter.
 - Backend bleibt prefix-frei und bedient `/api/v1/**`.
+
+Auf arrow-pi läuft dash als Docker-Container neben velo, PostgreSQL und Caddy (Compose-Stack und
+Deploy-Skripte im Repo `pi-ops`). Jeder Deploy ist ein Release: alles committen, `./mvnw verify`, dann
+`scripts/deploy.sh`. Das Skript gibt die `-SNAPSHOT`-Version frei, committet und taggt `v<version>`, baut die
+JAR, setzt die nächste Snapshot-Version und deployt über `../pi-ops`. Details in
+[.ai/stack.md](.ai/stack.md), Abschnitt „Versionierung“.

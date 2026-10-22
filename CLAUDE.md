@@ -11,7 +11,7 @@ Alle maschinenlesbaren Implementierungsdetails befinden sich im `.ai/`-Verzeichn
 | Datei | Inhalt |
 |---|---|
 | [.ai/README.md](.ai/README.md) | Index aller `.ai`-Dateien |
-| [.ai/stack.md](.ai/stack.md) | Tech-Stack, Versionen, Konfiguration |
+| [.ai/stack.md](.ai/stack.md) | Tech-Stack, Versionen, Konfiguration, Versionierung, Release & Deploy (`scripts/deploy.sh`) |
 | [.ai/datamodel.md](.ai/datamodel.md) | PostgreSQL-Schema, DDL, Flyway-Migrationen |
 | [.ai/api.md](.ai/api.md) | Vollständige REST-API-Spezifikation |
 | [.ai/phases.md](.ai/phases.md) | Implementierungsphasen mit Akzeptanzkriterien |
