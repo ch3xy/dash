@@ -141,6 +141,11 @@
                     </excludes>
                 </configuration>
             </plugin>
+            <!-- Writes git.properties (commit, dirty flag) for the version shown in the sidebar -->
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+            </plugin>
             <!-- Build Angular and copy output into Spring Boot static resources -->
             <plugin>
                 <groupId>com.github.eirslett</groupId>

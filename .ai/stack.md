@@ -121,6 +121,26 @@ frontend/
 
 ---
 
+## Versionierung
+
+- SemVer in der `<version>` der `pom.xml` ist die einzige Quelle der Version; zwischen zwei Releases steht
+  dort die nächste `-SNAPSHOT`-Version.
+- Die Sidebar zeigt `v<version> (Build <commit>)`, `-dirty` bei uncommitteten Änderungen; der Tooltip zeigt
+  die Build-Zeit. Version und Build-Zeit kommen aus `build-info.properties`, Commit und Dirty-Flag aus
+  `git.properties` (`git-commit-id-maven-plugin`), beides über `GET /health`.
+- Keine Buildnummer: Gebaut und deployt wird lokal ohne CI, der Commit identifiziert einen Build eindeutig.
+- Jeder Deploy ist ein Release (`scripts/deploy.sh`): Snapshot freigeben (`0.1.1-SNAPSHOT` → `0.1.1`),
+  `Release <version>` committen und `v<version>` taggen, die JAR aus diesem Commit bauen, dann die pom auf die
+  nächste Snapshot-Version (`0.1.2-SNAPSHOT`) setzen und über `../pi-ops` deployen. Es wird nie ein Stand mit
+  `-dirty` deployt.
+- minor und major werden nur auf ausdrücklichen Wunsch erhöht.
+
+```bash
+git commit ...           # alle Änderungen committen, Tests grün (./mvnw verify)
+scripts/deploy.sh        # Patch-Release; scripts/deploy.sh 0.2.0 für minor/major
+git push --follow-tags   # erst nach Rückfrage
+```
+
 ## Infrastruktur
 
 ### docker-compose.yml

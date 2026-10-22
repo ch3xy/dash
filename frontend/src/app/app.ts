@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
@@ -52,6 +53,7 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DatePipe,
     RouterOutlet,
     RouterLink,
     RouterLinkActive,
@@ -116,8 +118,14 @@ const COLLAPSED_KEY = 'dash-nav-collapsed';
           </a>
         </div>
 
-        @if (version()) {
-          <div class="nav-version">v{{ version() }}</div>
+        @if (buildInfo(); as build) {
+          <div class="nav-version"
+               [attr.title]="build.builtAt ? 'Gebaut ' + (build.builtAt | date: 'dd.MM.yyyy, HH:mm') : null">
+            v{{ build.version }}
+            @if (build.commit) {
+              (Build {{ build.commit }}{{ build.dirty ? '-dirty' : '' }})
+            }
+          </div>
         }
       </aside>
 
@@ -332,7 +340,7 @@ export class App {
 
   protected readonly collapsed = signal(this.readCollapsed());
   protected readonly drawerOpen = signal(false);
-  protected readonly version = toSignal(inject(HealthApiService).version(), { initialValue: null });
+  protected readonly buildInfo = toSignal(inject(HealthApiService).buildInfo(), { initialValue: null });
 
   private readonly shortcuts = inject(KeyboardShortcutService);
 

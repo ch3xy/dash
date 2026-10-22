@@ -27,11 +27,20 @@ GET /health
 ```
 
 ```json
-{ "status": "UP", "version": "0.0.1-SNAPSHOT", "timestamp": "2026-10-01T12:00:00Z" }
+{
+  "status": "UP",
+  "version": "0.1.0",
+  "commit": "abc1234",
+  "dirty": false,
+  "builtAt": "2026-10-22T08:00:00Z",
+  "timestamp": "2026-10-22T12:00:00Z"
+}
 ```
 
-`version` stammt aus der Maven-Build-Info (`META-INF/build-info.properties`), ohne Build-Info `dev`.
-Das Frontend zeigt sie in der Versionszeile der Sidebar.
+`version` und `builtAt` stammen aus der Maven-Build-Info (`META-INF/build-info.properties`), ohne
+Build-Info `dev` bzw. `null`. `commit` und `dirty` stammen aus `git.properties`
+(`git-commit-id-maven-plugin`), ohne Git `null` bzw. `false`. Das Frontend zeigt
+`v<version> (Build <commit>)` in der Versionszeile der Sidebar, die Build-Zeit als Tooltip.
 
 ---
 
