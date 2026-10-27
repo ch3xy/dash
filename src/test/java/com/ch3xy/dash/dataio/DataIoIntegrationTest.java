@@ -6,6 +6,7 @@ import com.ch3xy.dash.project.ProjectRateRequest;
 import com.ch3xy.dash.project.ProjectRequest;
 import com.ch3xy.dash.project.ProjectResponse;
 import com.ch3xy.dash.project.ProjectService;
+import com.ch3xy.dash.settings.AppSettingsResponse;
 import com.ch3xy.dash.timeentry.RecentCombination;
 import com.ch3xy.dash.timeentry.TimeEntryFilter;
 import com.ch3xy.dash.timeentry.TimeEntryRequest;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DataIoIntegrationTest extends AbstractIntegrationTest {
 
@@ -132,6 +134,51 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
         // The rate added after the backup must not survive the restore (snapshot/history stable).
         assertThat(projectService.getRates(project.id()))
                 .noneMatch(r -> r.hourlyRate().compareTo(new BigDecimal("200.00")) == 0);
+    }
+
+    @Test
+    void restoreKeepsOpenEndedRatesOpen() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Open Rate Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        projectService.addRate(project.id(), new ProjectRateRequest(
+                new BigDecimal("100.00"), "EUR", Instant.parse("2026-01-01T00:00:00Z"), null));
+
+        backupRestoreService.restore(backupService.export());
+
+        assertThat(projectService.getRates(project.id()))
+                .singleElement()
+                .satisfies(r -> assertThat(r.validTo()).isNull());
+    }
+
+    @Test
+    void restoreRejectsDocumentWithoutCollectionsAndKeepsData() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Survivor Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        BackupDocument empty = new BackupDocument(null, null, null, null, null, null, null, null, null);
+
+        assertThatThrownBy(() -> backupRestoreService.restore(empty))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(projectService.findAll(true)).anyMatch(p -> p.id().equals(project.id()));
+    }
+
+    @Test
+    void restoreRejectsInvalidSettingsBeforeWiping() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Bad Settings Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        BackupDocument backup = backupService.export();
+        BackupDocument broken = new BackupDocument(backup.exportedAt(),
+                new AppSettingsResponse("Europe/Viena", "EUR", BigDecimal.ZERO, "NONE", 15),
+                backup.clients(), backup.projects(), backup.projectRates(), backup.tasks(),
+                backup.tags(), backup.timeEntries(), backup.monthLocks());
+
+        assertThatThrownBy(() -> backupRestoreService.restore(broken))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(projectService.findAll(true)).anyMatch(p -> p.id().equals(project.id()));
     }
 
     @Test

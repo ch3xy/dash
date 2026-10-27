@@ -94,7 +94,7 @@ Methoden:
   - Berechnet `entryDate = endTime.atZone(appZone).toLocalDate()`
   - Ruft `RateResolverService.resolve(projectId, taskId, startTime)` auf
   - Berechnet `amountSnapshot` wenn `billable = true`
-- `update(UUID, TimeEntryRequest)` → `TimeEntryResponse` (Rate-Snapshot neu berechnet)
+- `update(UUID, TimeEntryRequest)` → `TimeEntryResponse` (Rate-Snapshot nur neu ermittelt, wenn Projekt, Task oder Startzeit sich ändern; sonst bleibt der Satz und nur der Betrag wird neu berechnet)
 - `delete(UUID)` → void
 - `continueEntry(UUID)` → `RunningTimerResponse` (delegiert an `TimerService.start`)
 
@@ -144,7 +144,7 @@ Kurzfassung:
 - `entryDate` aus `endTime` in App-Zeitzone
 - `hourlyRateSnapshot` nach Priorität: Task > aktive ProjectRate > Project-Default > App-Default
 - `amountSnapshot = 0.00` wenn `billable = false`
-- Snapshot bleibt unveränderlich nach Erstellung (außer bei `PUT`)
+- Snapshot bleibt unveränderlich nach Erstellung (außer bei `PUT`, das Projekt, Task oder Startzeit ändert)
 
 ---
 

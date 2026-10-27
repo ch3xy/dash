@@ -37,9 +37,7 @@ public class BackupRestoreService {
 
     @Transactional
     public RestoreResult restore(BackupDocument doc) {
-        if (doc == null) {
-            throw new IllegalArgumentException("backup document must not be null");
-        }
+        validate(doc);
         wipe();
 
         insertClients(doc);
@@ -55,6 +53,31 @@ public class BackupRestoreService {
         return new RestoreResult(
                 size(doc.clients()), size(doc.projects()), size(doc.projectRates()),
                 size(doc.tasks()), size(doc.tags()), size(doc.timeEntries()));
+    }
+
+    /**
+     * Everything is checked before {@link #wipe()}: unknown JSON properties are ignored,
+     * so any foreign JSON object deserializes into an all-null document, which would
+     * otherwise delete all data and "restore" nothing.
+     */
+    private void validate(BackupDocument doc) {
+        if (doc == null) {
+            throw new IllegalArgumentException("backup document must not be null");
+        }
+        requirePresent(doc.settings(), "settings");
+        requirePresent(doc.clients(), "clients");
+        requirePresent(doc.projects(), "projects");
+        requirePresent(doc.projectRates(), "projectRates");
+        requirePresent(doc.tasks(), "tasks");
+        requirePresent(doc.tags(), "tags");
+        requirePresent(doc.timeEntries(), "timeEntries");
+        settingsService.validate(toRequest(doc.settings()));
+    }
+
+    private static void requirePresent(Object value, String field) {
+        if (value == null) {
+            throw new IllegalArgumentException("Not a backup file: '" + field + "' is missing");
+        }
     }
 
     private void wipe() {
@@ -129,7 +152,7 @@ public class BackupRestoreService {
                 .addValue("hourlyRate", r.hourlyRate())
                 .addValue("currencyCode", r.currencyCode())
                 .addValue("validFrom", ts(r.validFrom()))
-                .addValue("validTo", ts(r.validTo()))
+                .addValue("validTo", nullableTs(r.validTo()))
                 .addValue("note", r.note())).toArray(SqlParameterSource[]::new);
         jdbc.batchUpdate("""
                 INSERT INTO project_rates (id, project_id, hourly_rate, currency_code,
@@ -242,17 +265,22 @@ public class BackupRestoreService {
     }
 
     private void restoreSettings(BackupDocument doc) {
-        AppSettingsResponse s = doc.settings();
-        if (s == null) {
-            return;
-        }
-        settingsService.update(new AppSettingsRequest(
-                s.timezone(), s.currency(), s.defaultRate(), s.roundingRule(), s.roundingMinutes()));
+        settingsService.update(toRequest(doc.settings()));
+    }
+
+    private static AppSettingsRequest toRequest(AppSettingsResponse s) {
+        return new AppSettingsRequest(
+                s.timezone(), s.currency(), s.defaultRate(), s.roundingRule(), s.roundingMinutes());
     }
 
     private static OffsetDateTime ts(Instant instant) {
         // Restored rows must satisfy NOT NULL created_at/updated_at even if the backup omitted them.
         return OffsetDateTime.ofInstant(instant != null ? instant : Instant.now(), ZoneOffset.UTC);
+    }
+
+    /** For nullable columns (e.g. an open-ended rate's valid_to): null must stay null. */
+    private static OffsetDateTime nullableTs(Instant instant) {
+        return instant != null ? OffsetDateTime.ofInstant(instant, ZoneOffset.UTC) : null;
     }
 
     private static boolean isEmpty(List<?> list) {

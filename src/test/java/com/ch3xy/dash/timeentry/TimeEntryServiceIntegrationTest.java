@@ -130,6 +130,40 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void editingDescriptionOrEndKeepsRateSnapshot() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse entry = service.create(new TimeEntryRequest(
+                project.id(), null, "typo", START, END, true, Set.of()));
+        assertThat(entry.hourlyRateSnapshot()).isEqualByComparingTo("50.00");
+
+        projectService.update(project.id(), new ProjectRequest(
+                null, project.name(), null, null, true,
+                new BigDecimal("90.00"), "EUR", null, null, BudgetReset.NONE));
+
+        TimeEntryResponse edited = service.update(entry.id(), new TimeEntryRequest(
+                project.id(), null, "fixed", START, END.plusSeconds(3600), true, Set.of()));
+
+        assertThat(edited.hourlyRateSnapshot()).isEqualByComparingTo("50.00");
+        assertThat(edited.amountSnapshot()).isEqualByComparingTo("150.00"); // 3h * 50
+    }
+
+    @Test
+    void movingStartTimeReResolvesRate() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse entry = service.create(new TimeEntryRequest(
+                project.id(), null, "x", START, END, true, Set.of()));
+
+        projectService.update(project.id(), new ProjectRequest(
+                null, project.name(), null, null, true,
+                new BigDecimal("90.00"), "EUR", null, null, BudgetReset.NONE));
+
+        TimeEntryResponse moved = service.update(entry.id(), new TimeEntryRequest(
+                project.id(), null, "x", START.plusSeconds(1800), END, true, Set.of()));
+
+        assertThat(moved.hourlyRateSnapshot()).isEqualByComparingTo("90.00");
+    }
+
+    @Test
     void bulkDeleteRemovesAllGivenEntries() {
         ProjectResponse project = projectWithDefaultRate();
         TimeEntryResponse e1 = service.create(new TimeEntryRequest(

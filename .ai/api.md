@@ -702,6 +702,10 @@ Vollständiger JSON-Snapshot aller Daten. `Content-Disposition: attachment; file
 `GET /backup`). Transaktionaler Wipe (FK-sichere Reihenfolge) + Re-Insert unter Erhalt der
 Original-IDs und aller Snapshots (Stundensatz, Betrag, Ratenhistorie bleiben reproduzierbar).
 
+Vor dem Wipe wird das Dokument geprüft: `settings`, `clients`, `projects`, `projectRates`,
+`tasks`, `tags` und `timeEntries` müssen vorhanden sein (leere Listen sind erlaubt), und die
+Settings müssen gültig sein. Sonst `422` und es wird nichts gelöscht.
+
 ```json
 { "clients": 3, "projects": 5, "projectRates": 4, "tasks": 8, "tags": 4, "timeEntries": 120 }
 ```

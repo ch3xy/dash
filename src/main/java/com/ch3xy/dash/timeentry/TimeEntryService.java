@@ -26,6 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -124,7 +125,7 @@ public class TimeEntryService {
     public TimeEntryResponse create(TimeEntryRequest req, TimeEntrySource source) {
         TimeEntry entry = new TimeEntry();
         entry.setSource(source);
-        apply(entry, req);
+        apply(entry, req, true);
         monthLocks.requireOpen(entry.getEntryDate());
         if (source == TimeEntrySource.MANUAL) {
             entry.getProject().requireNotArchived();
@@ -150,7 +151,12 @@ public class TimeEntryService {
         TimeEntry entry = require(id);
         monthLocks.requireOpen(entry.getEntryDate());
         UUID previousProjectId = entry.getProject().getId();
-        apply(entry, req);
+        // The rate snapshot is historical: only a change of what determines the rate
+        // (project, task, start time) re-resolves it. Other edits keep the stored rate.
+        boolean rateRelevantChange = !previousProjectId.equals(req.projectId())
+                || !Objects.equals(entry.getTask() != null ? entry.getTask().getId() : null, req.taskId())
+                || !entry.getStartTime().equals(req.startTime());
+        apply(entry, req, rateRelevantChange);
         monthLocks.requireOpen(entry.getEntryDate());
         // Editing an entry of an archived project is fine; moving time onto one is not.
         if (!entry.getProject().getId().equals(previousProjectId)) {
@@ -284,9 +290,10 @@ public class TimeEntryService {
 
     /**
      * Populates an entry from a request: validates the interval, computes derived
-     * fields (duration, entry date), resolves the rate snapshot and amount.
+     * fields (duration, entry date) and the amount. The rate snapshot is resolved anew
+     * only if {@code resolveRate}; otherwise the stored rate is reused.
      */
-    private void apply(TimeEntry entry, TimeEntryRequest req) {
+    private void apply(TimeEntry entry, TimeEntryRequest req, boolean resolveRate) {
         if (!req.endTime().isAfter(req.startTime())) {
             throw new IllegalArgumentException("endTime must be after startTime");
         }
@@ -314,10 +321,12 @@ public class TimeEntryService {
         entry.setBillable(req.billable());
         entry.setTags(resolveTags(req.tagIds()));
 
-        ResolvedRate rate = rateResolver.resolve(project, task, req.startTime());
-        entry.setHourlyRateSnapshot(rate.hourlyRate());
-        entry.setCurrencyCodeSnapshot(rate.currencyCode());
-        entry.setAmountSnapshot(computeAmount(req.billable(), durationSeconds, rate.hourlyRate()));
+        if (resolveRate) {
+            ResolvedRate rate = rateResolver.resolve(project, task, req.startTime());
+            entry.setHourlyRateSnapshot(rate.hourlyRate());
+            entry.setCurrencyCodeSnapshot(rate.currencyCode());
+        }
+        entry.setAmountSnapshot(computeAmount(req.billable(), durationSeconds, entry.getHourlyRateSnapshot()));
     }
 
     private BigDecimal computeAmount(boolean billable, long durationSeconds, BigDecimal hourlyRate) {

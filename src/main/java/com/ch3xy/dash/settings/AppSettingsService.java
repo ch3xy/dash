@@ -4,11 +4,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.time.ZoneId;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional(readOnly = true)
 public class AppSettingsService {
+
+    private static final Pattern CURRENCY = Pattern.compile("[A-Z]{3}");
 
     private final AppSettingsRepository repository;
 
@@ -46,14 +50,43 @@ public class AppSettingsService {
         );
     }
 
+    /**
+     * Validates in the service (not only via Bean Validation) because restore calls this
+     * directly. Stored values must always be parseable, otherwise every time-zone- or
+     * rounding-dependent operation fails.
+     */
     @Transactional
     public AppSettingsResponse update(AppSettingsRequest req) {
+        validate(req);
         save("timezone", req.timezone());
         save("currency", req.currency());
         save("default_rate", req.defaultRate().toPlainString());
         save("rounding_rule", req.roundingRule());
         save("rounding_minutes", String.valueOf(req.roundingMinutes()));
         return getAll();
+    }
+
+    /** Throws {@link IllegalArgumentException} naming the first invalid field. */
+    public void validate(AppSettingsRequest req) {
+        try {
+            ZoneId.of(req.timezone());
+        } catch (DateTimeException | NullPointerException e) {
+            throw new IllegalArgumentException("timezone: unknown time zone '" + req.timezone() + "'");
+        }
+        if (req.currency() == null || !CURRENCY.matcher(req.currency()).matches()) {
+            throw new IllegalArgumentException("currency: must be a 3-letter ISO code");
+        }
+        if (req.defaultRate() == null || req.defaultRate().signum() < 0) {
+            throw new IllegalArgumentException("defaultRate: must not be negative");
+        }
+        try {
+            RoundingRule.valueOf(req.roundingRule());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new IllegalArgumentException("roundingRule: unknown rule '" + req.roundingRule() + "'");
+        }
+        if (req.roundingMinutes() < 1 || req.roundingMinutes() > 60) {
+            throw new IllegalArgumentException("roundingMinutes: must be between 1 and 60");
+        }
     }
 
     private void save(String key, String value) {
