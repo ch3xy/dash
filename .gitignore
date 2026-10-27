@@ -35,4 +35,5 @@ build/
 .vscode/
 
 ### AI ###
-.claude/
+.claude/*
+!.claude/settings.json
