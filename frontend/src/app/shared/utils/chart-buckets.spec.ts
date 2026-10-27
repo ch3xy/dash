@@ -2,8 +2,12 @@ import { DailyProjectSegment } from '../../core/models';
 import { autoGranularity, bucketDays, bucketLabel, ChartDay, granularityAllowed, labelVisible } from './chart-buckets';
 import { addDays, isoWeek, toIsoDate } from './date-utils';
 
+/** Fully billable at 10/h. */
 function seg(projectId: string, durationSeconds: number): DailyProjectSegment {
-  return { date: '', projectId, projectName: projectId, projectColor: null, durationSeconds };
+  return {
+    date: '', projectId, projectName: projectId, projectColor: null, durationSeconds,
+    billableSeconds: durationSeconds, revenueAmount: String(durationSeconds / 360),
+  };
 }
 
 /** Consecutive days from `from`, each with 1h on project "a". */
@@ -80,6 +84,22 @@ describe('chart-buckets', () => {
     expect(month.totalSeconds).toBe(3600);
     expect(month.forecastSeconds).toBe(7200);
     expect(month.forecastProjects).toEqual([seg('a', 7200)]);
+  });
+
+  it('sums billable time and revenue per project across the bucket', () => {
+    const [week] = bucketDays(days('2026-10-05', 3), 'week');
+    expect(week.projects).toEqual([seg('a', 3 * 3600)]);
+  });
+
+  it('keeps unrounded forecast revenue so the bucket total does not drift by cents', () => {
+    // 1 billable minute at 100/h per day: 1.666… each, exactly 5.00 for the three days.
+    const input = days('2026-10-05', 3).map((d) => ({
+      ...d,
+      forecastSeconds: 60,
+      forecastProjects: [{ ...seg('a', 60), revenueAmount: '1.6666666667' }],
+    }));
+    const [week] = bucketDays(input, 'week');
+    expect(Number(week.forecastProjects[0].revenueAmount).toFixed(2)).toBe('5.00');
   });
 
   it('computes ISO week numbers across year boundaries', () => {

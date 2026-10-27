@@ -123,7 +123,7 @@ public class ForecastService {
         return new ForecastResponse(from, to, sourceFrom, sourceTo, total, billable,
                 revenue.setScale(2, RoundingMode.HALF_UP),
                 groups(groupRows, groupBy, projects, rates),
-                days(rows, from, to, projects));
+                days(rows, from, to, projects, rates));
     }
 
     /** A source row moved to its forecast date and target project. */
@@ -197,10 +197,16 @@ public class ForecastService {
                 .toList();
     }
 
-    private List<DayEntry> days(List<Mapped> rows, LocalDate from, LocalDate to, Map<UUID, Project> projects) {
-        Map<LocalDate, Map<UUID, Long>> byDay = new HashMap<>();
+    private List<DayEntry> days(List<Mapped> rows, LocalDate from, LocalDate to,
+                                Map<UUID, Project> projects, Map<UUID, BigDecimal> rates) {
+        // Per-day, per-project accumulator: seconds, billable seconds, revenue.
+        final class Acc { long seconds; long billable; BigDecimal revenue = BigDecimal.ZERO; }
+        Map<LocalDate, Map<UUID, Acc>> byDay = new HashMap<>();
         for (Mapped r : rows) {
-            byDay.computeIfAbsent(r.day(), d -> new HashMap<>()).merge(r.projectId(), r.seconds(), Long::sum);
+            Acc a = byDay.computeIfAbsent(r.day(), d -> new HashMap<>()).computeIfAbsent(r.projectId(), k -> new Acc());
+            a.seconds += r.seconds();
+            if (r.billable()) a.billable += r.seconds();
+            a.revenue = a.revenue.add(amount(r, rates));
         }
         List<DayEntry> days = new ArrayList<>();
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
@@ -208,7 +214,10 @@ public class ForecastService {
             List<ProjectSegment> segs = byDay.getOrDefault(d, Map.of()).entrySet().stream()
                     .map(e -> {
                         Project p = projects.get(e.getKey());
-                        return new ProjectSegment(date, e.getKey().toString(), p.getName(), p.getColor(), e.getValue());
+                        Acc a = e.getValue();
+                        return new ProjectSegment(date, e.getKey().toString(), p.getName(), p.getColor(),
+                                // Unrounded so sums over weeks/months match the totals; clients round for display.
+                                a.seconds, a.billable, a.revenue);
                     })
                     .sorted(Comparator.comparingLong(ProjectSegment::durationSeconds).reversed())
                     .toList();
@@ -218,6 +227,6 @@ public class ForecastService {
     }
 
     private List<DayEntry> emptyDays(LocalDate from, LocalDate to) {
-        return days(List.of(), from, to, Map.of());
+        return days(List.of(), from, to, Map.of(), Map.of());
     }
 }

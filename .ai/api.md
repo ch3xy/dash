@@ -526,6 +526,18 @@ Umsatz nach Kunde/Projekt/Monat.
 
 `intensity` = `durationSeconds / (8 * 3600)`, max 1.0.
 
+### `GET /reports/daily-breakdown`
+
+Gleiche Filter wie `/summary` plus `rounded` (Dauern gemäß Rundungsregel, wie Summary und Prognose). Ein Eintrag pro Kalendertag (auch leere Tage), je Tag die Projektsegmente fürs gestapelte Balkendiagramm samt Hover-Infos:
+
+```json
+{ "days": [ { "date": "2026-10-21", "totalSeconds": 10800, "projects": [
+  { "date": "2026-10-21", "projectId": "uuid", "projectName": "A2", "projectColor": "#6366f1",
+    "durationSeconds": 10800, "billableSeconds": 7200, "revenueAmount": "160.00" } ] } ] }
+```
+
+`revenueAmount` zählt nur abrechenbare Zeit (Snapshot-Beträge).
+
 ### `GET /reports/forecast`
 
 Gleiche Filter wie `/summary` plus `rounded`. Prognose für die Tage **nach heute** im Zeitraum, befüllt mit den Zeiten von **52 Wochen zuvor** (gleicher Wochentag im Vorjahr, Wochenenden bleiben Wochenenden).
@@ -545,6 +557,7 @@ Gleiche Filter wie `/summary` plus `rounded`. Prognose für die Tage **nach heut
 - Aktives Quellprojekt behält seine Zeit; archiviertes → aktuelles Projekt des Kunden (aktives Projekt mit den meisten Stunden der letzten 90 Tage, sonst das neueste). Ohne Ziel fällt die Zeit weg.
 - Umsatz = Vorjahresdauer × **aktueller** Satz des Zielprojekts (ohne Task-Override), nur für abrechenbare Einträge.
 - `groups` verwenden dieselben Keys/Labels wie `/summary` (Frontend merged). Task-Filter → keine Prognose.
+- `days[].projects` haben dasselbe Segmentformat wie `/daily-breakdown` (inkl. `billableSeconds`, `revenueAmount` zum aktuellen Satz). `revenueAmount` ist hier **ungerundet**, damit Wochen-/Monatssummen im Client exakt den Gruppen-Summen entsprechen; gerundet wird erst bei der Anzeige.
 
 ### `GET /reports/export.csv`
 

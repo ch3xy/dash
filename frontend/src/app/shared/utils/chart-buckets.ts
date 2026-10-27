@@ -162,8 +162,14 @@ function period(date: Date, g: ChartGranularity): [string, IsoDate, IsoDate] {
 function merge(into: Map<string, DailyProjectSegment>, segs: DailyProjectSegment[]): void {
   for (const s of segs) {
     const existing = into.get(s.projectId);
-    if (existing) existing.durationSeconds += s.durationSeconds;
-    else into.set(s.projectId, { ...s });
+    if (existing) {
+      existing.durationSeconds += s.durationSeconds;
+      existing.billableSeconds += s.billableSeconds;
+      // Forecast amounts arrive unrounded; keep full precision so only the display rounds.
+      existing.revenueAmount = String(Number(existing.revenueAmount) + Number(s.revenueAmount));
+    } else {
+      into.set(s.projectId, { ...s });
+    }
   }
 }
 

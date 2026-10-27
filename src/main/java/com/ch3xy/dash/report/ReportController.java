@@ -117,8 +117,10 @@ public class ReportController {
             description = "Gibt für jeden Kalendertag des angeforderten Zeitraums die Stunden pro Projekt zurück. Jeder Tag ist immer vorhanden – auch wenn keine Einträge existieren (totalSeconds=0). Geeignet für gestapelte Balkendiagramme."
     )
     @GetMapping("/daily-breakdown")
-    public ResponseEntity<DailyBreakdownResponse> dailyBreakdown(@ParameterObject FilterParams params) {
-        return ResponseEntity.ok(service.getDailyBreakdown(params.toFilter()));
+    public ResponseEntity<DailyBreakdownResponse> dailyBreakdown(
+            @ParameterObject FilterParams params,
+            @Parameter(description = "Wenn true, werden Dauern gemäß der App-Rundungsregel gerundet.") @RequestParam(defaultValue = "false") boolean rounded) {
+        return ResponseEntity.ok(service.getDailyBreakdown(params.toFilter(), rounded));
     }
 
     @Operation(

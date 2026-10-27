@@ -55,6 +55,11 @@ class ForecastServiceIntegrationTest extends AbstractIntegrationTest {
         assertThat(fc.sourceFrom()).isEqualTo(LocalDate.of(2040, 10, 22));
         assertThat(fc.days()).hasSize(11);
         assertThat(fc.days().getFirst().totalSeconds()).isEqualTo(5 * 3600);
+        assertThat(fc.days().getFirst().projects()).singleElement().satisfies(seg -> {
+            assertThat(seg.projectId()).isEqualTo(current.id().toString());
+            assertThat(seg.billableSeconds()).isEqualTo(5 * 3600);
+            assertThat(seg.revenueAmount()).isEqualByComparingTo("500.00");
+        });
     }
 
     @Test

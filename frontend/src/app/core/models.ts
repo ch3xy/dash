@@ -281,6 +281,9 @@ export interface DailyProjectSegment {
   projectName: string;
   projectColor: string | null;
   durationSeconds: number;
+  billableSeconds: number;
+  /** Billable time only. */
+  revenueAmount: string;
 }
 
 export interface DailyBreakdownDay {

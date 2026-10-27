@@ -255,33 +255,38 @@ public class ReportQueryRepository {
      * Per-day, per-project aggregation. Returns one row per (date, project) combination,
      * ordered by date ASC, then seconds DESC (dominant project first on each day).
      */
-    public List<ProjectSegment> dailyProjectRows(ReportFilter filter) {
+    public List<ProjectSegment> dailyProjectRows(ReportFilter filter, RoundingRule rule, int minutes) {
+        String dur = durationExpr(rule, minutes);
         String sql = """
                 SELECT to_char(te.entry_date, 'YYYY-MM-DD') AS date,
                        CAST(p.id AS text) AS project_id,
                        p.name                               AS project_name,
                        p.color                              AS project_color,
-                       SUM(te.duration_seconds)             AS duration_seconds
+                       SUM(%1$s)                            AS duration_seconds,
+                       COALESCE(SUM(CASE WHEN te.billable THEN %1$s ELSE 0 END), 0) AS billable_seconds,
+                       COALESCE(SUM(CASE WHEN te.billable THEN te.amount_snapshot ELSE 0 END), 0) AS revenue
                 FROM time_entries te
                 JOIN projects p ON p.id = te.project_id
                 LEFT JOIN clients c ON c.id = p.client_id
                 LEFT JOIN tasks t  ON t.id  = te.task_id
-                WHERE %s
+                WHERE %2$s
                 GROUP BY te.entry_date, p.id, p.name, p.color
                 ORDER BY te.entry_date, duration_seconds DESC
-                """.formatted(whereClause());
+                """.formatted(dur, whereClause());
         return jdbc.query(sql, params(filter), (rs, rowNum) -> new ProjectSegment(
                 rs.getString("date"),
                 rs.getString("project_id"),
                 rs.getString("project_name"),
                 rs.getString("project_color"),
-                rs.getLong("duration_seconds")
+                rs.getLong("duration_seconds"),
+                rs.getLong("billable_seconds"),
+                rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP)
         ));
     }
 
     /** Convenience: a date-keyed map (String YYYY-MM-DD → rows) built from {@link #dailyProjectRows}. */
-    public Map<String, List<ProjectSegment>> dailyProjectRowsByDate(ReportFilter filter) {
-        var rows = dailyProjectRows(filter);
+    public Map<String, List<ProjectSegment>> dailyProjectRowsByDate(ReportFilter filter, RoundingRule rule, int minutes) {
+        var rows = dailyProjectRows(filter, rule, minutes);
         var map = new java.util.LinkedHashMap<String, List<ProjectSegment>>();
         for (var row : rows) {
             map.computeIfAbsent(row.date(), k -> new java.util.ArrayList<>()).add(row);

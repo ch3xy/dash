@@ -1,5 +1,6 @@
 package com.ch3xy.dash.report.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -15,12 +16,17 @@ public record DailyBreakdownResponse(List<DayEntry> days) {
             List<ProjectSegment> projects
     ) {}
 
-    /** One project's contribution on a single day. date is YYYY-MM-DD (used internally for grouping). */
+    /**
+     * One project's contribution on a single day. date is YYYY-MM-DD (used internally for grouping).
+     * revenueAmount counts billable time only (chart tooltip).
+     */
     public record ProjectSegment(
             String date,
             String projectId,
             String projectName,
             String projectColor,
-            long durationSeconds
+            long durationSeconds,
+            long billableSeconds,
+            BigDecimal revenueAmount
     ) {}
 }

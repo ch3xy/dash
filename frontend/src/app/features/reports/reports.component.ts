@@ -21,6 +21,7 @@ import {
   ReportFilter,
   DailyBreakdown,
   DailyBreakdownDay,
+  DailyProjectSegment,
   ForecastReport,
   SummaryGroup,
   SummaryReport,
@@ -28,7 +29,7 @@ import {
   Task,
   TimeEntry,
 } from '../../core/models';
-import { ReportDonutComponent, DonutSegment } from '../../shared/components/report-donut.component';
+import { ReportDonutComponent, DonutHover, DonutSegment } from '../../shared/components/report-donut.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { persistQueryParams } from '../../core/view-state';
@@ -54,6 +55,44 @@ const CHART_PALETTE = [
 
 /** A summary group plus its forecast counterpart (forecast-only groups have zero actuals). */
 interface OverviewRow { g: SummaryGroup; fc: SummaryGroup | null }
+
+/** Projects listed per section in the bar tooltip; the rest is summarised. */
+const TIP_MAX_PROJECTS = 6;
+
+/** Totals of one tooltip section (actual or forecast) with its top projects. */
+interface TipSection {
+  seconds: number;
+  billableSeconds: number;
+  revenue: number;
+  projects: DailyProjectSegment[];
+  moreCount: number;
+}
+
+/** Hovered bar: only its identity and position, so the content always follows the current data. */
+interface BarHover {
+  key: string;
+  granularity: ChartGranularity;
+  x: number;
+  y: number;
+  side: 'left' | 'right';
+}
+
+/** Hover tooltip of a chart bar, positioned beside the bar inside the chart wrapper. */
+interface BarTip extends BarHover {
+  title: string;
+  partial: boolean;
+  actual: TipSection | null;
+  forecast: TipSection | null;
+  averagePerWorkday: number | null;
+}
+
+/** Hover tooltip of a donut slice / legend row, positioned inside the donut column. */
+interface DonutTip {
+  index: number;
+  x: number;
+  y: number;
+  side: 'left' | 'right';
+}
 
 const GRANULARITY_OPTIONS: Array<{ value: ChartGranularity | undefined; label: string }> = [
   { value: undefined, label: 'Auto' },
@@ -193,7 +232,7 @@ type DetailRow =
         <div class="card mt-4 ov-card">
           <!-- Bar chart (stacked by project), one bar per day/week/month -->
           @if (chartBuckets(); as days) {
-            <div class="ov-bars-wrap card-pad" style="border-bottom: 1px solid var(--border)">
+            <div class="ov-bars-wrap card-pad" style="border-bottom: 1px solid var(--border)" (mouseleave)="barHover.set(null)">
               <div class="ov-bars-head">
                 <div class="chart-gran" role="group" aria-label="Zeitachse">
                   @for (o of granularityOptions; track o.label) {
@@ -209,6 +248,8 @@ type DetailRow =
                 @for (day of days; track day.key; let i = $index) {
                   <div class="ov-bar-col" [class.ov-bar-col-zero]="day.totalSeconds + day.forecastSeconds === 0"
                        [class.ov-bar-partial]="day.partial" [class.clickable]="granularity() !== 'day'"
+                       [class.hovered]="barTip()?.key === day.key"
+                       (mouseenter)="showBarTip(day, $event)"
                        (click)="zoomInto(day)">
                     @if (days.length <= 14) {
                       <div class="ov-bar-label-top" [class.fc-label]="day.forecastSeconds > 0">
@@ -222,8 +263,7 @@ type DetailRow =
                       <!-- Stacked segments, bottom to top = projects ordered by seconds desc, forecast on top -->
                       @if (day.totalSeconds + day.forecastSeconds > 0) {
                         <div class="ov-bar-stack"
-                             [style.height.%]="dayBarPct(day.totalSeconds + day.forecastSeconds, days)"
-                             [title]="barTooltip(day)">
+                             [style.height.%]="dayBarPct(day.totalSeconds + day.forecastSeconds, days)">
                           @for (seg of day.projects; track seg.projectId) {
                             <div class="ov-bar-segment"
                                  [style.flex]="seg.durationSeconds"
@@ -243,6 +283,66 @@ type DetailRow =
                   </div>
                 }
               </div>
+              @if (barTip(); as tip) {
+                <div class="bar-tip" role="tooltip" [class.bar-tip-left]="tip.side === 'left'"
+                     [style.left.px]="tip.x" [style.top.px]="tip.y">
+                  <div class="bar-tip-title">{{ tip.title }}</div>
+                  @if (tip.partial) { <div class="bar-tip-note">Zeitraum nur teilweise im Report</div> }
+                  @if (!tip.actual && !tip.forecast) {
+                    <div class="bar-tip-note">Keine Zeiten erfasst</div>
+                  }
+                  @if (tip.actual; as a) {
+                    <div class="bar-tip-sec">
+                      <div class="bar-tip-head">
+                        <span class="bar-tip-swatch"></span>
+                        <span class="bar-tip-kind">Ist</span>
+                        <span class="mono">{{ a.seconds | duration: 'HH:MM' }}</span>
+                        <span class="mono bar-tip-money">{{ a.revenue | money: s.currencyCode }}</span>
+                      </div>
+                      @for (p of a.projects; track p.projectId) {
+                        <div class="bar-tip-row">
+                          <span class="ov-dot" [style.background]="segColor(p)"></span>
+                          <span class="bar-tip-name">{{ p.projectName }}</span>
+                          <span class="mono">{{ p.durationSeconds | duration: 'HH:MM' }}</span>
+                          <span class="mono bar-tip-money">{{ p.revenueAmount | money: s.currencyCode }}</span>
+                        </div>
+                      }
+                      @if (a.moreCount) { <div class="bar-tip-more">+ {{ a.moreCount }} weitere</div> }
+                      <div class="bar-tip-meta">Abrechenbar {{ a.billableSeconds | duration: 'HH:MM' }} ({{ ratio(a) * 100 | number: '1.0-0' }} %)</div>
+                    </div>
+                  }
+                  @if (tip.forecast; as fc) {
+                    <div class="bar-tip-sec bar-tip-fc">
+                      <div class="bar-tip-head">
+                        <span class="bar-tip-swatch bar-tip-swatch-fc"></span>
+                        <span class="bar-tip-kind">Prognose</span>
+                        <span class="mono">{{ fc.seconds | duration: 'HH:MM' }}</span>
+                        <span class="mono bar-tip-money">{{ fc.revenue | money: s.currencyCode }}</span>
+                      </div>
+                      @for (p of fc.projects; track p.projectId) {
+                        <div class="bar-tip-row">
+                          <span class="ov-dot ov-dot-fc" [style.background-color]="segColor(p)"></span>
+                          <span class="bar-tip-name">{{ p.projectName }}</span>
+                          <span class="mono">{{ p.durationSeconds | duration: 'HH:MM' }}</span>
+                          <span class="mono bar-tip-money">{{ p.revenueAmount | money: s.currencyCode }}</span>
+                        </div>
+                      }
+                      @if (fc.moreCount) { <div class="bar-tip-more">+ {{ fc.moreCount }} weitere</div> }
+                      <div class="bar-tip-meta">Abrechenbar {{ fc.billableSeconds | duration: 'HH:MM' }} ({{ ratio(fc) * 100 | number: '1.0-0' }} %) · aus Vorjahr, aktueller Satz</div>
+                    </div>
+                  }
+                  @if (tip.actual && tip.forecast) {
+                    <div class="bar-tip-total">
+                      <span>Ist + Prognose</span>
+                      <span class="mono">{{ tip.actual.seconds + tip.forecast.seconds | duration: 'HH:MM' }}</span>
+                      <span class="mono bar-tip-money">{{ tip.actual.revenue + tip.forecast.revenue | money: s.currencyCode }}</span>
+                    </div>
+                  }
+                  @if (tip.averagePerWorkday !== null) {
+                    <div class="bar-tip-meta">Ø pro Arbeitstag {{ tip.averagePerWorkday | duration: 'HH:MM' }}</div>
+                  }
+                </div>
+              }
             </div>
           }
           <!-- Bottom: project table + donut -->
@@ -288,20 +388,62 @@ type DetailRow =
                 </tbody>
               </table>
             </div>
-            <div class="ov-donut">
+            <div class="ov-donut" (mouseleave)="donutTip.set(null)">
               <app-report-donut
                 [segments]="donutSegments()"
+                [highlight]="donutTip()?.index ?? null"
+                (segmentHover)="onDonutHover($event)"
                 [centerLabel]="s.totalDurationSeconds + (forecast()?.totalDurationSeconds ?? 0) | duration: 'HH:MM'"
                 [centerSub]="forecast() ? 'Prognose' : 'Gesamt'" />
               <div class="ov-legend">
-                @for (seg of donutSegments(); track seg.label) {
-                  <div class="ov-legend-row">
+                @for (seg of donutSegments(); track seg.label; let i = $index) {
+                  <div class="ov-legend-row" [class.active]="donutTip()?.index === i"
+                       (mouseenter)="showLegendTip(i, $event)" (mouseleave)="donutTip.set(null)">
                     <span class="ov-dot" [style.background]="seg.color"></span>
                     <span class="ov-legend-label">{{ seg.label }}</span>
                     <span class="ov-legend-val mono">{{ seg.display }}</span>
                   </div>
                 }
               </div>
+              @if (donutTip(); as tip) {
+                @let row = overviewRows()[tip.index];
+                @let seg = donutSegments()[tip.index];
+                @if (row && seg) {
+                  <div class="bar-tip" role="tooltip" [class.bar-tip-left]="tip.side === 'left'"
+                       [style.left.px]="tip.x" [style.top.px]="tip.y">
+                    <div class="bar-tip-title">
+                      <span class="ov-dot" [style.background]="groupColor(row.g, tip.index)"></span>{{ row.g.label }}
+                      @if (groupClientName(row.g)) { <span class="faint"> – {{ groupClientName(row.g) }}</span> }
+                    </div>
+                    <div class="bar-tip-note">{{ seg.fraction * 100 | number: '1.0-1' }} % der {{ forecast() ? 'Zeit inkl. Prognose' : 'Gesamtzeit' }}</div>
+                    <div class="bar-tip-sec">
+                      <div class="bar-tip-head">
+                        <span class="bar-tip-swatch"></span>
+                        <span class="bar-tip-kind">Ist</span>
+                        <span class="mono">{{ row.g.durationSeconds | duration: 'HH:MM' }}</span>
+                        <span class="mono bar-tip-money">{{ row.g.revenueAmount | money: s.currencyCode }}</span>
+                      </div>
+                      <div class="bar-tip-meta">Abrechenbar {{ row.g.billableDurationSeconds | duration: 'HH:MM' }} ({{ share(row.g.billableDurationSeconds, row.g.durationSeconds) * 100 | number: '1.0-0' }} %)</div>
+                    </div>
+                    @if (row.fc; as fc) {
+                      <div class="bar-tip-sec bar-tip-fc">
+                        <div class="bar-tip-head">
+                          <span class="bar-tip-swatch bar-tip-swatch-fc"></span>
+                          <span class="bar-tip-kind">Prognose</span>
+                          <span class="mono">{{ fc.durationSeconds | duration: 'HH:MM' }}</span>
+                          <span class="mono bar-tip-money">{{ fc.revenueAmount | money: s.currencyCode }}</span>
+                        </div>
+                        <div class="bar-tip-meta">Abrechenbar {{ fc.billableDurationSeconds | duration: 'HH:MM' }} ({{ share(fc.billableDurationSeconds, fc.durationSeconds) * 100 | number: '1.0-0' }} %) · aus Vorjahr, aktueller Satz</div>
+                      </div>
+                      <div class="bar-tip-total">
+                        <span>Ist + Prognose</span>
+                        <span class="mono">{{ row.g.durationSeconds + fc.durationSeconds | duration: 'HH:MM' }}</span>
+                        <span class="mono bar-tip-money">{{ sum(row.g.revenueAmount, fc.revenueAmount) | money: s.currencyCode }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              }
             </div>
           </div>
         </div>
@@ -495,7 +637,7 @@ type DetailRow =
     .heatmap-legend { display: flex; align-items: center; gap: 3px; margin-top: var(--sp-2); justify-content: flex-end; }
     /* ── Clockify overview ── */
     .ov-card { overflow: visible; }
-    .ov-bars-wrap { padding-bottom: var(--sp-4); }
+    .ov-bars-wrap { padding-bottom: var(--sp-4); position: relative; }
     .ov-bars { display: flex; gap: 0; align-items: flex-end; height: 220px; overflow-x: auto; }
     .ov-bar-col { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; }
     .ov-bar-label-top { font-size: var(--fs-xs); font-weight: 600; margin-bottom: 4px; text-align: center; height: 18px; line-height: 18px; white-space: nowrap; }
@@ -519,6 +661,29 @@ type DetailRow =
     .ov-bars-dense .ov-bar-col { min-width: 12px; }
     .ov-bars-dense .ov-bar-track { width: 72%; }
     .ov-bar-col.clickable { cursor: pointer; }
+    .ov-bar-col.hovered { background: color-mix(in srgb, var(--brand) 6%, transparent); border-radius: var(--radius-sm); }
+    /* ── Bar hover tooltip ── */
+    .bar-tip { position: absolute; z-index: 10; width: max-content; min-width: 220px; max-width: 320px; margin-left: 8px;
+               padding: var(--sp-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+               box-shadow: var(--shadow-lg); font-size: var(--fs-sm); pointer-events: none; }
+    .bar-tip-left { transform: translateX(-100%); margin-left: -8px; }
+    .bar-tip-title { font-weight: 600; margin-bottom: var(--sp-2); }
+    .bar-tip-title .ov-dot { margin-right: var(--sp-2); }
+    .bar-tip-note { font-size: var(--fs-xs); color: var(--text-muted); margin-bottom: var(--sp-2); }
+    .bar-tip-sec + .bar-tip-sec { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px dashed var(--border); }
+    .bar-tip-head, .bar-tip-row, .bar-tip-total { display: grid; grid-template-columns: auto 1fr auto auto; gap: var(--sp-2); align-items: center; }
+    .bar-tip-head { font-weight: 600; margin-bottom: 2px; }
+    .bar-tip-kind { text-transform: uppercase; font-size: var(--fs-xs); letter-spacing: 0.04em; }
+    .bar-tip-swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--text-muted); }
+    .bar-tip-swatch-fc, .ov-dot-fc { opacity: 0.55; background-image: repeating-linear-gradient(135deg, transparent 0 2px, color-mix(in srgb, var(--surface) 60%, transparent) 2px 4px); }
+    .bar-tip-swatch-fc { background-color: var(--text-muted); }
+    .bar-tip-row { padding-left: 2px; color: var(--text); }
+    .bar-tip-row .ov-dot { margin-right: 0; width: 8px; height: 8px; }
+    .bar-tip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-tip-money { color: var(--text-muted); min-width: 72px; text-align: right; }
+    .bar-tip-fc .bar-tip-row, .bar-tip-fc .bar-tip-head { font-style: italic; color: var(--text-muted); }
+    .bar-tip-more, .bar-tip-meta { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+    .bar-tip-total { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--border); font-weight: 600; grid-template-columns: 1fr auto auto; }
     .ov-bar-col.clickable:hover .ov-bar-stack { filter: brightness(1.08); }
     /* Period cut by the range: lower bar is expected, so de-emphasise it */
     .ov-bar-partial .ov-bar-stack { opacity: 0.7; }
@@ -529,9 +694,10 @@ type DetailRow =
     .ov-group-row.clickable { cursor: pointer; }
     .ov-group-row.clickable:hover td { background: color-mix(in srgb, var(--brand) 6%, transparent); }
     .ov-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; vertical-align: middle; }
-    .ov-donut { flex-shrink: 0; width: 260px; padding: var(--sp-5); display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); border-left: 1px solid var(--border); }
+    .ov-donut { position: relative; flex-shrink: 0; width: 260px; padding: var(--sp-5); display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); border-left: 1px solid var(--border); }
     .ov-legend { width: 100%; display: flex; flex-direction: column; gap: var(--sp-2); }
-    .ov-legend-row { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+    .ov-legend-row { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); padding: 2px 4px; margin: -2px -4px; border-radius: var(--radius-sm); cursor: default; }
+    .ov-legend-row.active { background: var(--hover); }
     .ov-legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ov-legend-val { color: var(--text-muted); }
     @media (max-width: 840px) {
@@ -807,6 +973,9 @@ export class ReportsComponent {
   }
 
   private loadAll(filter: ReportFilter): void {
+    // Positions and indices refer to the old layout.
+    this.barHover.set(null);
+    this.donutTip.set(null);
     this.reportApi.summary(filter).subscribe((s) => this.summary.set(s));
     this.reportApi.budget(filter).subscribe((b) => this.budget.set(b));
     this.reportApi.attendance(filter.from, filter.to).subscribe((a) => this.attendance.set(a));
@@ -921,18 +1090,73 @@ export class ReportsComponent {
     return CHART_PALETTE[Math.max(0, idx) % CHART_PALETTE.length];
   }
 
-  barTooltip(day: ChartBucket): string {
-    const fmt = (sec: number) => new DurationPipe().transform(sec, 'HH:MM');
+  /** Bar under the mouse; null when the pointer left the chart. */
+  protected readonly barHover = signal<BarHover | null>(null);
+
+  /** Tooltip of the hovered bar, built from the current buckets (stays right when data arrives late). */
+  protected readonly barTip = computed<BarTip | null>(() => {
+    const hover = this.barHover();
     const g = this.granularity();
+    if (!hover || hover.granularity !== g) return null;
+    const day = this.chartBuckets()?.find((b) => b.key === hover.key);
+    if (!day) return null;
     const total = day.totalSeconds + day.forecastSeconds;
-    const head = [`${bucketTitle(day, g)}: ${fmt(total)}`];
-    if (g !== 'day' && day.workdays > 0) head.push(`Ø pro Arbeitstag: ${fmt(Math.round(total / day.workdays))}`);
-    return [
-      ...head,
-      '',
-      ...day.projects.map((s) => `${s.projectName}: ${fmt(s.durationSeconds)}`),
-      ...day.forecastProjects.map((s) => `${s.projectName} (Prognose): ${fmt(s.durationSeconds)}`),
-    ].join('\n');
+    return {
+      ...hover,
+      title: bucketTitle(day, g),
+      partial: day.partial,
+      actual: day.totalSeconds > 0 ? tipSection(day.projects) : null,
+      forecast: day.forecastSeconds > 0 ? tipSection(day.forecastProjects) : null,
+      averagePerWorkday: g !== 'day' && day.workdays > 0 && total > 0 ? Math.round(total / day.workdays) : null,
+    };
+  });
+
+  /** Shows the tooltip beside the hovered bar, on the side with more room. */
+  showBarTip(day: ChartBucket, event: MouseEvent): void {
+    const col = event.currentTarget as HTMLElement;
+    const wrap = col.closest('.ov-bars-wrap') as HTMLElement;
+    const colRect = col.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const right = colRect.left + colRect.width / 2 - wrapRect.left < wrapRect.width / 2;
+    this.barHover.set({
+      key: day.key,
+      granularity: this.granularity(),
+      x: (right ? colRect.right : colRect.left) - wrapRect.left,
+      y: colRect.top - wrapRect.top,
+      side: right ? 'right' : 'left',
+    });
+  }
+
+  /** Hover info of the donut slice / legend row under the mouse. */
+  protected readonly donutTip = signal<DonutTip | null>(null);
+
+  onDonutHover(hover: DonutHover | null): void {
+    if (!hover) {
+      this.donutTip.set(null);
+      return;
+    }
+    this.placeDonutTip(hover.index, hover.clientX, hover.clientY, document.querySelector('.ov-donut'));
+  }
+
+  showLegendTip(index: number, event: MouseEvent): void {
+    const row = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.placeDonutTip(index, row.left, row.top, (event.currentTarget as HTMLElement).closest('.ov-donut'));
+  }
+
+  /** Tooltip beside the pointer, towards the page centre (the donut column sits at the right edge). */
+  private placeDonutTip(index: number, clientX: number, clientY: number, host: Element | null): void {
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    const side = clientX > window.innerWidth / 2 ? 'left' : 'right';
+    this.donutTip.set({ index, x: clientX - rect.left, y: clientY - rect.top, side });
+  }
+
+  share(part: number, total: number): number {
+    return total > 0 ? part / total : 0;
+  }
+
+  ratio(sec: TipSection): number {
+    return sec.seconds > 0 ? sec.billableSeconds / sec.seconds : 0;
   }
 
   barLabel(day: ChartBucket, index: number, barCount: number): string {
@@ -956,6 +1180,7 @@ export class ReportsComponent {
   /** Click on a week/month bar narrows the range to that full period (shown daily again). */
   zoomInto(day: ChartBucket): void {
     if (this.granularity() === 'day') return;
+    this.barHover.set(null);
     this.patch({ from: day.periodFrom, to: day.periodTo, chart: undefined });
   }
 
@@ -992,4 +1217,14 @@ export class ReportsComponent {
       this.loadDetailed(this.f());
     }
   }
+}
+
+function tipSection(projects: DailyProjectSegment[]): TipSection {
+  return {
+    seconds: projects.reduce((acc, p) => acc + p.durationSeconds, 0),
+    billableSeconds: projects.reduce((acc, p) => acc + p.billableSeconds, 0),
+    revenue: projects.reduce((acc, p) => acc + Number(p.revenueAmount), 0),
+    projects: projects.slice(0, TIP_MAX_PROJECTS),
+    moreCount: Math.max(0, projects.length - TIP_MAX_PROJECTS),
+  };
 }
