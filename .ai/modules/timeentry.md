@@ -145,6 +145,8 @@ Kurzfassung:
 - `hourlyRateSnapshot` nach Priorität: Task > aktive ProjectRate > Project-Default > App-Default
 - `amountSnapshot = 0.00` wenn `billable = false`
 - Snapshot bleibt unveränderlich nach Erstellung (außer bei `PUT`, das Projekt, Task oder Startzeit ändert)
+- Split: Der Originaleintrag bleibt die erste Hälfte (ID, Quelle, `createdAt` bleiben), die zweite Hälfte ist ein neuer `ADJUSTMENT`-Eintrag. Beide behalten den Raten-Snapshot, die Beträge ergeben zusammen den Originalbetrag.
+- Höchstens ein laufender Timer (`ux_single_running_timer`, V7)
 
 ---
 

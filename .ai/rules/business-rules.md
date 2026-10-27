@@ -57,12 +57,14 @@ usedPercent     = usedMinutes / project.hourBudgetMinutes * 100.0
 | ≥ 80 und ≤ 100 | `WARNING` |
 | > 100 | `EXCEEDED` |
 
+Ohne Stundenbudget (`null`) gilt `NO_BUDGET`: `usedMinutes` und Umsatz werden trotzdem geliefert, keine Prozentrechnung. Ein Stundenbudget muss > 0 sein (DB-Check, V7).
+
 ---
 
 ## 4. Rundungsregeln
 
 Die Rohdauer (`durationSeconds`) wird **immer unverändert gespeichert**.  
-Rundung wird nur für Reports und Berechnungen auf Anfrage angewendet (`?rounded=true`).
+Rundung wird nur für Reports und Berechnungen auf Anfrage angewendet (`?rounded=true`). Detailreport und CSV/XLSX-Export runden je Eintrag (`DurationRounding`); Beträge bleiben Snapshots der Rohdauer.
 
 | `roundingRule` | `roundingMinutes` | Beschreibung |
 |---|---|---|
@@ -128,7 +130,10 @@ Archivierte Projekte/Tasks/Clients bleiben in **alten TimeEntries und Reports** 
 | `Task.name` | nicht leer, unique je Projekt (case-insensitive) |
 | `Tag.name` | nicht leer, unique unter aktiven Tags (case-insensitive) |
 | `ProjectRate.hourlyRate` | ≥ 0 |
-| `ProjectRate.validFrom` | nicht null |
+| `ProjectRate.validFrom` | nicht null, nach dem Beginn der jüngsten Rate (sonst `422`) |
+| `Project.defaultHourlyRate`, `moneyBudgetAmount`, `Task.hourlyRateOverride`, `estimatedMinutes` | ≥ 0 |
+| `Project.hourBudgetMinutes` | > 0 oder leer |
+| Währungscodes | 3 Buchstaben (ISO 4217) |
 | Geldbeträge | `BigDecimal`, nie `double/float` |
 | Zeitpunkte | `Instant` intern, `timestamptz` in DB |
 
@@ -147,3 +152,9 @@ WHERE project_id = :projectId
 ```
 
 Alle bestehenden `TimeEntry.hourlyRateSnapshot` bleiben **unverändert**. Reports auf vergangene Zeiträume sind damit reproduzierbar.
+
+Raten sind chronologisch: eine neue Rate muss nach dem Beginn der jüngsten liegen (keine Rückdatierung). Pro Projekt ist höchstens eine Rate offen (`ux_open_rate_per_project`, V7).
+
+## 10. Umsatz in mehreren Währungen
+
+Umsätze werden **nicht umgerechnet**. Summary, Revenue, Dashboard und Monatsabschluss liefern die einzige Umsatzwährung (sonst die App-Währung) plus `mixedCurrencies = true`, wenn Einträge verschiedener Währungen summiert wurden; die UI zeigt dann einen Hinweis.

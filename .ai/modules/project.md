@@ -148,7 +148,9 @@ public record ProjectRateRequest(
 - Projektname einmalig je Client (case-insensitiv).
 - Status-Übergänge: Alle Übergänge erlaubt außer von `ARCHIVED` zurück (UI kann warnen).
 - Budgetberechnung: s. [rules/business-rules.md](../rules/business-rules.md#3-budgetverbrauch).
-- Rate-Abschluss: s. [rules/business-rules.md](../rules/business-rules.md#9-historische-stundensätze).
+- Rate-Abschluss: s. [rules/business-rules.md](../rules/business-rules.md#9-historische-stundensätze). Neue Raten nur chronologisch (nach der jüngsten), sonst `422`.
+- Ohne Stundenbudget: Status `NO_BUDGET`, Verbrauch und Umsatz werden trotzdem geliefert.
+- Sätze und Budgets ≥ 0, Stundenbudget > 0; Prüfung per Bean Validation und DB-Checks (V7).
 
 ---
 

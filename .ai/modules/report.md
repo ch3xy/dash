@@ -171,6 +171,10 @@ public record ReportFilter(
 
 ---
 
+`rounded` gilt auch für `/reports/detailed` sowie CSV/XLSX-Export (je Eintrag via `DurationRounding`, Beträge bleiben Snapshots). Umsatzsummen tragen `mixedCurrencies` (s. [business-rules §10](../rules/business-rules.md#10-umsatz-in-mehreren-währungen)).
+
+---
+
 ## Report-Response-Shapes
 
 Vollständige JSON-Shapes: s. [api.md](../api.md) — Abschnitt Reports.
