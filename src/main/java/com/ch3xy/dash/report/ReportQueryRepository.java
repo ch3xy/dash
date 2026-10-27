@@ -1,5 +1,6 @@
 package com.ch3xy.dash.report;
 
+import com.ch3xy.dash.common.money.RevenueCurrency;
 import com.ch3xy.dash.report.dto.AttendanceResponse;
 import com.ch3xy.dash.report.dto.BudgetReportEntry;
 import com.ch3xy.dash.report.dto.DailyBreakdownResponse.ProjectSegment;
@@ -70,21 +71,26 @@ public class ReportQueryRepository {
         String sql = """
                 SELECT COALESCE(SUM(%s), 0) AS total_seconds,
                        COALESCE(SUM(CASE WHEN te.billable THEN %s ELSE 0 END), 0) AS billable_seconds,
-                       COALESCE(SUM(CASE WHEN te.billable THEN te.amount_snapshot ELSE 0 END), 0) AS revenue
+                       COALESCE(SUM(CASE WHEN te.billable THEN te.amount_snapshot ELSE 0 END), 0) AS revenue,
+                       %s
                 FROM time_entries te
                 JOIN projects p ON p.id = te.project_id
                 LEFT JOIN clients c ON c.id = p.client_id
                 LEFT JOIN tasks t ON t.id = te.task_id
                 WHERE %s
-                """.formatted(dur, dur, whereClause());
+                """.formatted(dur, dur, RevenueCurrency.columns("te"), whereClause());
         return jdbc.queryForObject(sql, params(filter), (rs, rowNum) -> new SummaryTotals(
                 rs.getLong("total_seconds"),
                 rs.getLong("billable_seconds"),
-                rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP)
+                rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP),
+                RevenueCurrency.label(rs, null),
+                RevenueCurrency.mixed(rs)
         ));
     }
 
-    public record SummaryTotals(long totalSeconds, long billableSeconds, BigDecimal revenue) {}
+    /** {@code currency} is the entries' shared currency, null if none or mixed. */
+    public record SummaryTotals(long totalSeconds, long billableSeconds, BigDecimal revenue,
+                                String currency, boolean mixedCurrencies) {}
 
     public List<TrendPoint> trend(ReportFilter filter, GroupBy granularity, RoundingRule rule, int minutes) {
         String periodExpr = switch (granularity) {
@@ -132,10 +138,10 @@ public class ReportQueryRepository {
                 LEFT JOIN time_entries te ON te.project_id = p.id
                     AND (p.budget_reset <> 'MONTHLY' OR te.entry_date >= CAST(:monthStart AS date))
                     AND (p.budget_reset <> 'YEARLY'  OR te.entry_date >= CAST(:yearStart AS date))
-                WHERE p.hour_budget_minutes IS NOT NULL
+                WHERE p.hour_budget_minutes > 0
                   AND p.status <> 'ARCHIVED'
                 GROUP BY p.id, p.name, c.name, p.hour_budget_minutes
-                ORDER BY (COALESCE(SUM(te.duration_seconds), 0) / 60.0 / p.hour_budget_minutes) DESC
+                ORDER BY (COALESCE(SUM(te.duration_seconds), 0) / 60.0 / NULLIF(p.hour_budget_minutes, 0)) DESC
                 """;
 
         MapSqlParameterSource params = new MapSqlParameterSource()

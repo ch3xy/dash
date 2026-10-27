@@ -36,6 +36,28 @@ export function toInstant(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
+/**
+ * Start/end instants from dialog fields. `date` is the start day; an end time before the
+ * start time lies on the next day (22:00–01:00). A field whose day and HH:MM still match
+ * `original` keeps the original instant, so seconds survive an unchanged save.
+ * Returns null if a field is empty.
+ */
+export function intervalFromFields(
+  date: string,
+  start: string,
+  end: string,
+  original?: { startTime: string; endTime: string },
+): { startTime: string; endTime: string } | null {
+  if (!date || !start || !end) return null;
+  const endDate = end < start ? toIsoDate(addDays(new Date(`${date}T12:00:00`), 1)) : date;
+  const keep = (iso: string | undefined, d: string, t: string) =>
+    iso && toIsoDate(new Date(iso)) === d && timeOf(iso) === t ? iso : toInstant(d, t);
+  return {
+    startTime: keep(original?.startTime, date, start),
+    endTime: keep(original?.endTime, endDate, end),
+  };
+}
+
 /** Extract HH:MM (local) from an ISO instant. */
 export function timeOf(instant: string): string {
   const d = new Date(instant);

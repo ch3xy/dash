@@ -34,12 +34,12 @@ import { LucideArrowRight } from '@lucide/angular';
           <div class="card card-pad">
             <div class="card-title">Heute</div>
             <div class="stat-value">{{ d.today.durationSeconds | duration: 'HH:MM' }}</div>
-            <div class="muted">{{ d.today.revenueAmount | money }}</div>
+            <div class="muted">{{ d.today.revenueAmount | money: d.today.currencyCode }}@if (d.today.mixedCurrencies) { <span class="badge warn" title="Umsatz enthält Einträge in verschiedenen Währungen; sie werden ohne Umrechnung summiert.">gemischte Währungen</span> }</div>
           </div>
           <div class="card card-pad">
             <div class="card-title">{{ periodLabel() }}</div>
             <div class="stat-value">{{ d.period.durationSeconds | duration: 'HH:MM' }}</div>
-            <div class="muted">{{ d.period.revenueAmount | money }}</div>
+            <div class="muted">{{ d.period.revenueAmount | money: d.period.currencyCode }}@if (d.period.mixedCurrencies) { <span class="badge warn" title="Umsatz enthält Einträge in verschiedenen Währungen; sie werden ohne Umrechnung summiert.">gemischte Währungen</span> }</div>
           </div>
           <div class="card card-pad">
             <div class="card-title">Ø pro Arbeitstag</div>

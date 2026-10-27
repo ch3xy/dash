@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -86,6 +87,38 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(result.importedEntries()).isZero();
         assertThat(result.warnings()).hasSize(1);
+    }
+
+    @Test
+    void clockifyImportDetectsDayFirstDatesPerFile() {
+        String name = "ClkDate Project " + System.nanoTime();
+        String csv = """
+                Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time
+                %1$s,,april third,,,No,03/04/2026,08:00:00,03/04/2026,09:00:00
+                %1$s,,april thirteenth,,,No,13/04/2026,08:00:00,13/04/2026,09:00:00
+                """.formatted(name);
+
+        ImportResult result = importService.importCsv(csv);
+
+        assertThat(result.importedEntries()).isEqualTo(2);
+        assertThat(result.warnings()).isEmpty();
+        UUID projectId = projectService.findAll(true).stream()
+                .filter(p -> p.name().equals(name)).findFirst().orElseThrow().id();
+        assertThat(timeEntryService.findAll(
+                new TimeEntryFilter(null, null, null, projectId, null, null, null, null), Pageable.unpaged()))
+                .extracting(e -> e.entryDate().toString())
+                .containsExactlyInAnyOrder("2026-04-03", "2026-04-13");
+    }
+
+    @Test
+    void clockifyImportWarnsAboutAmbiguousDates() {
+        String csv = """
+                Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time
+                ClkAmbiguous %d,,x,,,No,03/04/2026,08:00:00,03/04/2026,09:00:00
+                """.formatted(System.nanoTime());
+
+        assertThat(importService.importCsv(csv).warnings()).singleElement()
+                .asString().contains("ambiguous");
     }
 
     @Test
@@ -179,6 +212,28 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(projectService.findAll(true)).anyMatch(p -> p.id().equals(project.id()));
+    }
+
+    @Test
+    void restoreRejectsProjectWithoutStatusBeforeWiping() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Missing Status Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        BackupDocument backup = backupService.export();
+        var projects = new java.util.ArrayList<>(backup.projects());
+        var p = projects.getFirst();
+        projects.set(0, new ProjectResponse(p.id(), p.clientId(), p.clientName(), p.name(), p.description(),
+                p.color(), null, p.billableByDefault(), p.defaultHourlyRate(), p.currencyCode(),
+                p.hourBudgetMinutes(), p.moneyBudgetAmount(), p.budgetReset(), p.createdAt(), p.updatedAt()));
+        BackupDocument broken = new BackupDocument(backup.exportedAt(), backup.settings(),
+                backup.clients(), projects, backup.projectRates(), backup.tasks(),
+                backup.tags(), backup.timeEntries(), backup.monthLocks());
+
+        assertThatThrownBy(() -> backupRestoreService.restore(broken))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("projects[0].status is missing");
+
+        assertThat(projectService.findAll(true)).anyMatch(p2 -> p2.id().equals(project.id()));
     }
 
     @Test

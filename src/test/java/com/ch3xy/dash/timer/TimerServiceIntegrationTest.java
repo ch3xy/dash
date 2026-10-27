@@ -5,6 +5,9 @@ import com.ch3xy.dash.project.BudgetReset;
 import com.ch3xy.dash.project.ProjectRequest;
 import com.ch3xy.dash.project.ProjectResponse;
 import com.ch3xy.dash.project.ProjectService;
+import com.ch3xy.dash.task.TaskRequest;
+import com.ch3xy.dash.task.TaskResponse;
+import com.ch3xy.dash.task.TaskService;
 import com.ch3xy.dash.timeentry.TimeEntryResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -42,6 +46,8 @@ class TimerServiceIntegrationTest extends AbstractIntegrationTest {
     ProjectService projectService;
     @Autowired
     RunningTimerRepository timerRepository;
+    @Autowired
+    TaskService taskService;
 
     private ProjectResponse project;
 
@@ -117,6 +123,43 @@ class TimerServiceIntegrationTest extends AbstractIntegrationTest {
         timerService.start(new TimerStartRequest(project.id(), null, "throwaway", true, Set.of()));
         timerService.discard();
         assertThat(timerRepository.count()).isZero();
+    }
+
+    @Test
+    void changingProjectClearsTaskOfPreviousProjectSoTimerCanBeStopped() {
+        TaskResponse task = taskService.create(project.id(), new TaskRequest("Timer Task", null, true, null, null));
+        ProjectResponse other = projectService.create(new ProjectRequest(
+                null, "Other Timer Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        timerService.start(new TimerStartRequest(project.id(), task.id(), "work", true, Set.of()));
+
+        TimerResponse updated = timerService.update(new TimerUpdateRequest(other.id(), null, null, null, null));
+        assertThat(updated.taskId()).isNull();
+
+        CLOCK.set(Instant.parse("2026-06-19T10:00:00Z"));
+        assertThat(timerService.stop(new TimerStopRequest(null)).projectId()).isEqualTo(other.id());
+    }
+
+    @Test
+    void emptyDescriptionClearsAndStopTakesGivenDescription() {
+        timerService.start(new TimerStartRequest(project.id(), null, "old", true, Set.of()));
+        assertThat(timerService.update(new TimerUpdateRequest(null, null, "", null, null)).description()).isNull();
+
+        CLOCK.set(Instant.parse("2026-06-19T10:00:00Z"));
+        assertThat(timerService.stop(new TimerStopRequest("typed before stop")).description())
+                .isEqualTo("typed before stop");
+    }
+
+    @Test
+    void databaseAllowsOnlyOneRunningTimer() {
+        timerService.start(new TimerStartRequest(project.id(), null, "first", true, Set.of()));
+        RunningTimer ghost = new RunningTimer();
+        ghost.setProject(timerRepository.findAll().getFirst().getProject());
+        ghost.setStartTime(CLOCK.instant());
+        ghost.setBillable(true);
+
+        assertThatThrownBy(() -> timerRepository.saveAndFlush(ghost))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

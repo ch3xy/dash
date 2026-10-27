@@ -6,6 +6,7 @@ import { ToastService } from '../../core/toast.service';
 import { LucideX } from '@lucide/angular';
 
 /** Create/edit dialog for client master data. `client` null means "new client". */
+import { currencyError } from '../../shared/utils/form-checks';
 @Component({
   selector: 'app-client-form-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,12 +33,13 @@ import { LucideX } from '@lucide/angular';
           </div>
           <div class="field" style="max-width: 120px;">
             <label>Währung</label>
-            <input class="input mono" [(ngModel)]="form.currencyCode" maxlength="3" />
+            <input class="input mono" [(ngModel)]="form.currencyCode" maxlength="3" placeholder="Standard" />
+            @if (currencyError(); as e) { <span class="field-error">{{ e }}</span> }
           </div>
         </div>
         <div class="dialog-footer">
           <button class="btn" (click)="closed.emit()">Abbrechen</button>
-          <button class="btn btn-primary" (click)="save()" [disabled]="!form.name?.trim()">Speichern</button>
+          <button class="btn btn-primary" (click)="save()" [disabled]="!form.name?.trim() || currencyError()">Speichern</button>
         </div>
       </div>
     </div>
@@ -66,12 +68,18 @@ export class ClientFormDialogComponent implements OnInit {
     }
   }
 
+  /** Empty = app default currency. */
+  protected currencyError(): string | null {
+    return currencyError(this.form.currencyCode, true);
+  }
+
   save(): void {
-    if (!this.form.name?.trim()) {
+    if (!this.form.name?.trim() || this.currencyError()) {
       return;
     }
+    const payload: ClientInput = { ...this.form, currencyCode: (this.form.currencyCode ?? '').trim().toUpperCase() };
     const c = this.client();
-    const req = c ? this.api.update(c.id, this.form) : this.api.create(this.form);
+    const req = c ? this.api.update(c.id, payload) : this.api.create(payload);
     req.subscribe((result) => {
       this.toast.success('Gespeichert');
       this.saved.emit(result);

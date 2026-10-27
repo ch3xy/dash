@@ -236,6 +236,8 @@ export interface SummaryReport {
   billableRatio: number;
   revenueAmount: string;
   currencyCode: string;
+  /** Revenue sums entries in different currencies without conversion. */
+  mixedCurrencies: boolean;
   groupedBy: GroupBy;
   groups: SummaryGroup[];
   period: { from: IsoDate; to: IsoDate };
@@ -326,6 +328,9 @@ export interface PeriodStat {
   durationSeconds: number;
   billableDurationSeconds: number;
   revenueAmount: string;
+  currencyCode: string;
+  /** Revenue sums entries in different currencies without conversion. */
+  mixedCurrencies: boolean;
 }
 
 export interface BudgetAlert {

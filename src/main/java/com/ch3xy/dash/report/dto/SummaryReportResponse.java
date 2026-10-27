@@ -11,6 +11,8 @@ public record SummaryReportResponse(
         double billableRatio,
         BigDecimal revenueAmount,
         String currencyCode,
+        /** True if the revenue sums entries in different currencies (no conversion). */
+        boolean mixedCurrencies,
         String groupedBy,
         List<SummaryGroup> groups,
         Period period

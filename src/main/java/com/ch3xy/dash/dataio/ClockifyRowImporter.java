@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Imports a single Clockify CSV row in its own transaction (REQUIRES_NEW) so that
@@ -40,11 +42,10 @@ import java.util.UUID;
 @Component
 public class ClockifyRowImporter {
 
-    private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
-            DateTimeFormatter.ofPattern("yyyy-MM-dd"),
-            DateTimeFormatter.ofPattern("MM/dd/yyyy"),
-            DateTimeFormatter.ofPattern("dd/MM/yyyy")
-    );
+    private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    static final DateTimeFormatter MONTH_FIRST = DateTimeFormatter.ofPattern("MM/dd/yyyy");
+    static final DateTimeFormatter DAY_FIRST = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final Pattern SLASH_DATE = Pattern.compile("(\\d{1,2})/(\\d{1,2})/\\d{4}");
     private static final List<DateTimeFormatter> TIME_FORMATS = List.of(
             DateTimeFormatter.ofPattern("HH:mm:ss"),
             DateTimeFormatter.ofPattern("HH:mm"),
@@ -77,13 +78,42 @@ public class ClockifyRowImporter {
      * @return whether the row produced a time entry or why it was skipped.
      * @throws RuntimeException if the row could not be imported (rolls this row back).
      */
+    /**
+     * Decides once per file whether slash dates are {@code MM/dd/yyyy} or {@code dd/MM/yyyy}:
+     * a first part above 12 means day first, a second part above 12 means month first.
+     * If no value decides it, day first is assumed (European export) and a warning is added.
+     */
+    static DateTimeFormatter detectSlashDateFormat(List<CSVRecord> records, List<String> warnings) {
+        boolean dayFirst = false;
+        boolean monthFirst = false;
+        boolean anySlash = false;
+        for (CSVRecord record : records) {
+            for (String column : List.of("Start Date", "End Date")) {
+                String value = get(record, column);
+                Matcher m = value != null ? SLASH_DATE.matcher(value.trim()) : null;
+                if (m == null || !m.matches()) {
+                    continue;
+                }
+                anySlash = true;
+                dayFirst |= Integer.parseInt(m.group(1)) > 12;
+                monthFirst |= Integer.parseInt(m.group(2)) > 12;
+            }
+        }
+        if (dayFirst && monthFirst) {
+            warnings.add("Date format: the file mixes DD/MM and MM/DD dates; read as DD/MM/YYYY");
+        } else if (anySlash && !dayFirst && !monthFirst) {
+            warnings.add("Date format: ambiguous (no day above 12); read as DD/MM/YYYY");
+        }
+        return monthFirst && !dayFirst ? MONTH_FIRST : DAY_FIRST;
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public RowOutcome importRow(CSVRecord record, ImportCounters counters) {
+    public RowOutcome importRow(CSVRecord record, ImportCounters counters, DateTimeFormatter slashDateFormat) {
         ZoneId zone = settingsService.getTimezone();
         String currency = settingsService.getCurrency();
 
-        Instant start = parseInstant(get(record, "Start Date"), get(record, "Start Time"), zone);
-        Instant end = parseInstant(get(record, "End Date"), get(record, "End Time"), zone);
+        Instant start = parseInstant(get(record, "Start Date"), get(record, "Start Time"), zone, slashDateFormat);
+        Instant end = parseInstant(get(record, "End Date"), get(record, "End Time"), zone, slashDateFormat);
         if (start == null || end == null || !end.isAfter(start)) {
             return RowOutcome.INVALID;
         }
@@ -170,11 +200,11 @@ public class ClockifyRowImporter {
         return ids;
     }
 
-    private Instant parseInstant(String date, String time, ZoneId zone) {
+    private Instant parseInstant(String date, String time, ZoneId zone, DateTimeFormatter slashDateFormat) {
         if (date == null || date.isBlank()) {
             return null;
         }
-        LocalDate localDate = parseDate(date);
+        LocalDate localDate = parseDate(date, slashDateFormat);
         LocalTime localTime = (time == null || time.isBlank()) ? LocalTime.MIDNIGHT : parseTime(time);
         if (localDate == null || localTime == null) {
             return null;
@@ -182,8 +212,8 @@ public class ClockifyRowImporter {
         return localDate.atTime(localTime).atZone(zone).toInstant();
     }
 
-    private LocalDate parseDate(String value) {
-        for (DateTimeFormatter fmt : DATE_FORMATS) {
+    private LocalDate parseDate(String value, DateTimeFormatter slashDateFormat) {
+        for (DateTimeFormatter fmt : List.of(ISO_DATE, slashDateFormat)) {
             try {
                 return LocalDate.parse(value, fmt);
             } catch (RuntimeException ignored) {

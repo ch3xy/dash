@@ -138,4 +138,29 @@ class TimesheetServiceIntegrationTest extends AbstractIntegrationTest {
                 new CopyWeekRequest(LocalDate.of(2027, 2, 1), LocalDate.of(2027, 2, 7))))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void increasingLateCellPlacesEntryBeforeFirstEntryInsteadOfNextDay() {
+        LocalDate day = LocalDate.of(2027, 3, 17); // Vienna = UTC+1
+        ProjectResponse p = project(true);
+        timeEntryService.create(new TimeEntryRequest(p.id(), null, "late",
+                Instant.parse("2027-03-17T20:00:00Z"), Instant.parse("2027-03-17T22:00:00Z"), true, Set.of()));
+
+        timesheetService.setCell(new TimesheetCellRequest(p.id(), null, day, 4 * 3600));
+
+        assertThat(entries(p.id(), day, day)).extracting(TimeEntryResponse::durationSeconds)
+                .containsExactlyInAnyOrder(7200, 7200);
+        assertThat(entries(p.id(), day.plusDays(1), day.plusDays(1))).isEmpty();
+    }
+
+    @Test
+    void cellThatCannotFitIntoTheDayIsRejected() {
+        LocalDate day = LocalDate.of(2027, 3, 18);
+        ProjectResponse p = project(true);
+        timeEntryService.create(new TimeEntryRequest(p.id(), null, "almost all day",
+                Instant.parse("2027-03-17T23:30:00Z"), Instant.parse("2027-03-18T22:30:00Z"), true, Set.of()));
+
+        assertThatThrownBy(() -> timesheetService.setCell(new TimesheetCellRequest(p.id(), null, day, 25 * 3600)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

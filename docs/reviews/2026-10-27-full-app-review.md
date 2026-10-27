@@ -14,32 +14,32 @@
 | 2 | HIGH | `dataio/BackupRestoreService.java:132,253` | Restore sets `validTo` of open-ended rates to "now", so active rates expire | Codex | FIXED |
 | 3 | HIGH | `settings/AppSettingsService.java:50` | Settings are stored without validation; an invalid time zone makes almost every endpoint fail with 500 | Claude, Codex | FIXED |
 | 4 | HIGH | `timeentry/TimeEntryService.java:149,317` | Every update re-resolves the rate snapshot, so editing a description re-prices old entries | Claude, Codex | FIXED |
-| 5 | MEDIUM | `timeentry/TimeEntryService.java:266` | `split` re-creates both halves with today's rate and loses id/source | Claude, Codex | CONFIRMED |
-| 6 | MEDIUM | `timer/TimerService.java:167` | "Only one running timer" is check-then-insert with no DB constraint | Claude, Codex | CONFIRMED |
-| 7 | MEDIUM | `report/ReportQueryRepository.java:138` | Budget 0 causes division by zero, so the budget report and the dashboard return 500 | Claude, Codex | CONFIRMED |
-| 8 | MEDIUM | `timesheet/TimesheetService.java:88` | Timesheet top-up is appended after the day's last entry and can roll over midnight into the next day | Claude, Codex | CONFIRMED |
-| 9 | MEDIUM | `timer/TimerService.java:124` | Changing the timer's project keeps the old task, so the timer can no longer be stopped | Claude, Codex | CONFIRMED |
-| 10 | MEDIUM | `project/ProjectService.java:118`, `ProjectRateRepository.java:26` | A backdated rate inverts or overlaps the rate history | Claude, Codex | CONFIRMED |
-| 11 | MEDIUM | `project/ProjectRequest.java`, `ProjectRateRequest.java`, `task/TaskRequest.java` | No range/format validation on rates, budgets and currency | Claude, Codex | CONFIRMED |
-| 12 | MEDIUM | `common/error/GlobalExceptionHandler.java:59` | Framework exceptions (bad JSON, bad UUID, 404, 405) become 500 and echo internal messages | Claude, Codex | CONFIRMED |
-| 13 | MEDIUM | `dataio/ClockifyRowImporter.java:43` | Ambiguous Clockify dates are parsed as US `MM/dd` before `dd/MM` | Claude, Codex | CONFIRMED |
-| 14 | MEDIUM | `report/ReportQueryRepository.java:73`, `ReportService.java:76` | Revenue totals add up different currencies and are labelled with the current app currency | Codex (Claude: frontend only) | CONFIRMED |
-| 15 | MEDIUM | `dataio/BackupRestoreService.java:101,107,199,244` | Restore NPEs on missing enums and applies unvalidated settings | Claude | PLAUSIBLE |
-| 16 | MEDIUM | `project/ProjectService.java:81` | Project budget status reports €0 revenue when the project has no hour budget | Codex | CONFIRMED |
-| 17 | MEDIUM | `report/ReportController.java:79,162,175` | Detailed report and CSV/XLSX export ignore the "rounded" option | Codex | CONFIRMED |
-| 18 | MEDIUM | `frontend/…/projects/project-detail.component.ts:217`, `clients/client-detail.component.ts:124` | Detail pages load only once; navigating A → B keeps A's data while actions target B | Codex | CONFIRMED |
-| 19 | MEDIUM | `frontend/…/timer/timer.component.ts:570`, `calendar/calendar.component.ts:814` | Entry dialogs build start and end on the same date, so entries that cross midnight cannot be created or edited | Claude, Codex | CONFIRMED |
-| 20 | MEDIUM | `frontend/…/shared/utils/date-utils.ts:36`, timer and calendar dialogs | Saving an unchanged entry drops the seconds and changes its raw duration | Codex | CONFIRMED |
-| 21 | MEDIUM | `frontend/…/calendar/calendar.component.ts:647` | Moving a short entry stretches it to at least 15 min | Claude, Codex | CONFIRMED |
-| 22 | MEDIUM | `frontend/…/reports/reports.component.ts:975` (plus timer, timesheet and calendar `load()`) | Overlapping HTTP loads with no cancellation; a stale response can overwrite newer data | Claude, Codex | CONFIRMED |
-| 23 | MEDIUM | `frontend/…/core/timer-state.service.ts:37` | The 15 s poll can overwrite a just-completed start or stop | Claude, Codex | PLAUSIBLE |
-| 24 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:201` | The description PATCH on blur races with Stop; clearing the description has no effect | Claude, Codex | CONFIRMED |
-| 25 | MEDIUM | `frontend/…/core/layout/global-search.component.ts:152` | One failed search request kills the search stream for good | Claude, Codex | CONFIRMED |
-| 26 | MEDIUM | `frontend/…/timer/timer.component.ts` | Timer page list does not refresh when the timer is stopped from the top bar or with `s` | Claude, Codex | PLAUSIBLE |
-| 27 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:145,173`, `timer.component.ts:417` | Timer bar and manual entry ignore the project's/task's `billableByDefault` | Codex | CONFIRMED |
-| 28 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:148` | Timer bar loads projects and tags once and stays stale until reload | Claude (low), Codex | CONFIRMED |
-| 29 | MEDIUM | `frontend/…/core/layout/global-search.component.ts:207` | A search hit navigates to `/timer?date=…`, but the timer page ignores `date` | Claude, Codex (low) | CONFIRMED |
-| 30 | MEDIUM | `frontend/…/timesheet/timesheet.component.ts:338` | All cell inputs are disabled while a save runs, which breaks Tab-driven entry | Claude | PLAUSIBLE |
+| 5 | MEDIUM | `timeentry/TimeEntryService.java:266` | `split` re-creates both halves with today's rate and loses id/source | Claude, Codex | FIXED |
+| 6 | MEDIUM | `timer/TimerService.java:167` | "Only one running timer" is check-then-insert with no DB constraint | Claude, Codex | FIXED |
+| 7 | MEDIUM | `report/ReportQueryRepository.java:138` | Budget 0 causes division by zero, so the budget report and the dashboard return 500 | Claude, Codex | FIXED |
+| 8 | MEDIUM | `timesheet/TimesheetService.java:88` | Timesheet top-up is appended after the day's last entry and can roll over midnight into the next day | Claude, Codex | FIXED |
+| 9 | MEDIUM | `timer/TimerService.java:124` | Changing the timer's project keeps the old task, so the timer can no longer be stopped | Claude, Codex | FIXED |
+| 10 | MEDIUM | `project/ProjectService.java:118`, `ProjectRateRepository.java:26` | A backdated rate inverts or overlaps the rate history | Claude, Codex | FIXED |
+| 11 | MEDIUM | `project/ProjectRequest.java`, `ProjectRateRequest.java`, `task/TaskRequest.java` | No range/format validation on rates, budgets and currency | Claude, Codex | FIXED |
+| 12 | MEDIUM | `common/error/GlobalExceptionHandler.java:59` | Framework exceptions (bad JSON, bad UUID, 404, 405) become 500 and echo internal messages | Claude, Codex | FIXED |
+| 13 | MEDIUM | `dataio/ClockifyRowImporter.java:43` | Ambiguous Clockify dates are parsed as US `MM/dd` before `dd/MM` | Claude, Codex | FIXED |
+| 14 | MEDIUM | `report/ReportQueryRepository.java:73`, `ReportService.java:76` | Revenue totals add up different currencies and are labelled with the current app currency | Codex (Claude: frontend only) | FIXED |
+| 15 | MEDIUM | `dataio/BackupRestoreService.java:101,107,199,244` | Restore NPEs on missing enums and applies unvalidated settings | Claude | FIXED |
+| 16 | MEDIUM | `project/ProjectService.java:81` | Project budget status reports €0 revenue when the project has no hour budget | Codex | FIXED |
+| 17 | MEDIUM | `report/ReportController.java:79,162,175` | Detailed report and CSV/XLSX export ignore the "rounded" option | Codex | FIXED |
+| 18 | MEDIUM | `frontend/…/projects/project-detail.component.ts:217`, `clients/client-detail.component.ts:124` | Detail pages load only once; navigating A → B keeps A's data while actions target B | Codex | FIXED |
+| 19 | MEDIUM | `frontend/…/timer/timer.component.ts:570`, `calendar/calendar.component.ts:814` | Entry dialogs build start and end on the same date, so entries that cross midnight cannot be created or edited | Claude, Codex | FIXED |
+| 20 | MEDIUM | `frontend/…/shared/utils/date-utils.ts:36`, timer and calendar dialogs | Saving an unchanged entry drops the seconds and changes its raw duration | Codex | FIXED |
+| 21 | MEDIUM | `frontend/…/calendar/calendar.component.ts:647` | Moving a short entry stretches it to at least 15 min | Claude, Codex | FIXED |
+| 22 | MEDIUM | `frontend/…/reports/reports.component.ts:975` (plus timer, timesheet and calendar `load()`) | Overlapping HTTP loads with no cancellation; a stale response can overwrite newer data | Claude, Codex | FIXED |
+| 23 | MEDIUM | `frontend/…/core/timer-state.service.ts:37` | The 15 s poll can overwrite a just-completed start or stop | Claude, Codex | FIXED |
+| 24 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:201` | The description PATCH on blur races with Stop; clearing the description has no effect | Claude, Codex | FIXED |
+| 25 | MEDIUM | `frontend/…/core/layout/global-search.component.ts:152` | One failed search request kills the search stream for good | Claude, Codex | FIXED |
+| 26 | MEDIUM | `frontend/…/timer/timer.component.ts` | Timer page list does not refresh when the timer is stopped from the top bar or with `s` | Claude, Codex | FIXED |
+| 27 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:145,173`, `timer.component.ts:417` | Timer bar and manual entry ignore the project's/task's `billableByDefault` | Codex | FIXED |
+| 28 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:148` | Timer bar loads projects and tags once and stays stale until reload | Claude (low), Codex | FIXED |
+| 29 | MEDIUM | `frontend/…/core/layout/global-search.component.ts:207` | A search hit navigates to `/timer?date=…`, but the timer page ignores `date` | Claude, Codex (low) | FIXED |
+| 30 | MEDIUM | `frontend/…/timesheet/timesheet.component.ts:338` | All cell inputs are disabled while a save runs, which breaks Tab-driven entry | Claude | FIXED |
 | 31 | LOW | see list | 35 further low-severity findings (validation, races, a11y, edge cases) | Claude, Codex | mostly PLAUSIBLE |
 
 ---

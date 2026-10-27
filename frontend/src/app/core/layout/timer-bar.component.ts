@@ -8,6 +8,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Observable, catchError, finalize, of, shareReplay, switchMap } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { Project, Tag, Task } from '../models';
 import { ProjectApiService } from '../api/project-api.service';
@@ -37,14 +38,15 @@ import { LucidePlay, LucideSquare, LucideX } from '@lucide/angular';
       } @else {
         <input #descInput class="input desc" [(ngModel)]="description" placeholder="Woran arbeitest du?"
                (keydown.enter)="start()" />
-        <select class="select proj-select" [(ngModel)]="projectId" (ngModelChange)="onProjectChange()">
+        <select class="select proj-select" [(ngModel)]="projectId" (ngModelChange)="onProjectChange()"
+                (focus)="loadCatalogs()">
           <option [ngValue]="null" disabled>Projekt wählen…</option>
           @for (p of projects(); track p.id) {
             <option [ngValue]="p.id">{{ p.clientName ? p.clientName + ' · ' : '' }}{{ p.name }}</option>
           }
         </select>
         @if (tasks().length) {
-          <select class="select task-select" [(ngModel)]="taskId">
+          <select class="select task-select" [(ngModel)]="taskId" (ngModelChange)="onTaskChange()">
             <option [ngValue]="null">— Task —</option>
             @for (tk of tasks(); track tk.id) {
               <option [ngValue]="tk.id">{{ tk.name }}</option>
@@ -144,14 +146,22 @@ export class TimerBarComponent {
   protected taskId: string | null = null;
   protected billable = true;
 
+  /** In-flight description PATCH from blur; stop waits for it so the two don't race. */
+  private pendingPatch: Observable<unknown> | null = null;
+
   constructor() {
-    this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
-    this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
+    this.loadCatalogs();
     this.shortcuts.commands$.pipe(takeUntilDestroyed()).subscribe((cmd) => {
       if (cmd === 'focus-timer') {
         this.descInput()?.nativeElement.focus();
       }
     });
+  }
+
+  /** Reloaded on focus so projects/tags created or archived meanwhile show up correctly. */
+  loadCatalogs(): void {
+    this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
+    this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
   }
 
   @HostListener('document:click')
@@ -161,6 +171,9 @@ export class TimerBarComponent {
 
   protected toggleTagPanel(e: MouseEvent): void {
     e.stopPropagation();
+    if (!this.showTagPanel()) {
+      this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
+    }
     this.showTagPanel.update((v) => !v);
   }
 
@@ -173,8 +186,21 @@ export class TimerBarComponent {
   onProjectChange(): void {
     this.taskId = null;
     this.tasks.set([]);
+    const project = this.projects().find((p) => p.id === this.projectId);
+    if (project) {
+      this.billable = project.billableByDefault;
+    }
     if (this.projectId) {
       this.taskApi.getForProject(this.projectId).subscribe((t) => this.tasks.set(t));
+    }
+  }
+
+  onTaskChange(): void {
+    const task = this.tasks().find((t) => t.id === this.taskId);
+    const project = this.projects().find((p) => p.id === this.projectId);
+    const def = task?.billableByDefault ?? project?.billableByDefault;
+    if (def !== undefined) {
+      this.billable = def;
     }
   }
 
@@ -199,7 +225,14 @@ export class TimerBarComponent {
   }
 
   stop(): void {
-    this.timerState.stop().subscribe(() => this.toast.success('Eintrag gespeichert'));
+    // Send the field's current text with the stop, so a description typed right before
+    // clicking Stop is saved even though its blur PATCH may still be in flight.
+    const typed = this.descInput()?.nativeElement.value;
+    const description = typed !== undefined && typed !== (this.timerState.timer()?.description ?? '')
+      ? typed : undefined;
+    (this.pendingPatch ?? of(null))
+      .pipe(catchError(() => of(null)), switchMap(() => this.timerState.stop(description)))
+      .subscribe(() => this.toast.success('Eintrag gespeichert'));
   }
 
   discard(): void {
@@ -207,8 +240,17 @@ export class TimerBarComponent {
   }
 
   updateDescription(value: string): void {
-    if (this.timerState.isRunning()) {
-      this.timerState.patch({ description: value || null }).subscribe();
+    if (!this.timerState.isRunning() || value === (this.timerState.timer()?.description ?? '')) {
+      return;
     }
+    // '' clears the description; null would mean "unchanged".
+    const req = this.timerState.patch({ description: value }).pipe(
+      finalize(() => {
+        if (this.pendingPatch === req) this.pendingPatch = null;
+      }),
+      shareReplay(1),
+    );
+    this.pendingPatch = req;
+    req.subscribe({ error: () => undefined });
   }
 }

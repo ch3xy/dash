@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -269,6 +268,11 @@ public class TimeEntryService {
         return repository.saveAll(entries).stream().map(TimeEntryResponse::from).toList();
     }
 
+    /**
+     * Splits an entry at {@code splitAt}. The original row stays the first half (id,
+     * source and createdAt are kept); the second half is a new ADJUSTMENT entry. Both
+     * halves keep the original rate snapshot, and the amounts add up to the original amount.
+     */
     @Transactional
     public List<TimeEntryResponse> split(UUID id, Instant splitAt) {
         TimeEntry original = require(id);
@@ -276,16 +280,36 @@ public class TimeEntryService {
             throw new IllegalArgumentException("splitAt must be strictly between startTime and endTime");
         }
         monthLocks.requireOpen(original.getEntryDate());
-        Set<UUID> tagIds = original.getTags().stream().map(Tag::getId).collect(Collectors.toSet());
-        UUID projectId = original.getProject().getId();
-        UUID taskId = original.getTask() != null ? original.getTask().getId() : null;
-        TimeEntryRequest req1 = new TimeEntryRequest(projectId, taskId, original.getDescription(),
-                original.getStartTime(), splitAt, original.isBillable(), tagIds);
-        TimeEntryRequest req2 = new TimeEntryRequest(projectId, taskId, original.getDescription(),
-                splitAt, original.getEndTime(), original.isBillable(), tagIds);
-        repository.delete(original);
-        repository.flush();
-        return List.of(create(req1, TimeEntrySource.ADJUSTMENT), create(req2, TimeEntrySource.ADJUSTMENT));
+        BigDecimal originalAmount = original.getAmountSnapshot();
+
+        TimeEntry second = new TimeEntry();
+        second.setSource(TimeEntrySource.ADJUSTMENT);
+        second.setProject(original.getProject());
+        second.setTask(original.getTask());
+        second.setDescription(original.getDescription());
+        second.setBillable(original.isBillable());
+        second.setTags(new HashSet<>(original.getTags()));
+        second.setHourlyRateSnapshot(original.getHourlyRateSnapshot());
+        second.setCurrencyCodeSnapshot(original.getCurrencyCodeSnapshot());
+        setInterval(second, splitAt, original.getEndTime());
+        setInterval(original, original.getStartTime(), splitAt);
+        if (originalAmount != null) {
+            second.setAmountSnapshot(originalAmount.subtract(original.getAmountSnapshot()));
+        }
+        monthLocks.requireOpen(original.getEntryDate());
+        monthLocks.requireOpen(second.getEntryDate());
+        return List.of(TimeEntryResponse.from(repository.save(original)),
+                TimeEntryResponse.from(repository.save(second)));
+    }
+
+    /** Sets start/end and the derived duration, entry date and amount (from the stored rate). */
+    private void setInterval(TimeEntry entry, Instant start, Instant end) {
+        long durationSeconds = ChronoUnit.SECONDS.between(start, end);
+        entry.setStartTime(start);
+        entry.setEndTime(end);
+        entry.setDurationSeconds((int) durationSeconds);
+        entry.setEntryDate(end.atZone(settingsService.getTimezone()).toLocalDate());
+        entry.setAmountSnapshot(computeAmount(entry.isBillable(), durationSeconds, entry.getHourlyRateSnapshot()));
     }
 
     /**

@@ -29,6 +29,14 @@ public record TimeEntryResponse(
         List<TagRef> tags,
         Instant createdAt, Instant updatedAt
 ) {
+    /** Copy with another duration, e.g. rounded for display in reports and exports. */
+    public TimeEntryResponse withDurationSeconds(int seconds) {
+        return new TimeEntryResponse(id, projectId, projectName, projectColor, clientId, clientName,
+                taskId, taskName, description, startTime, endTime, seconds, entryDate, billable,
+                hourlyRateSnapshot, currencyCodeSnapshot, amountSnapshot, source, tags,
+                createdAt, updatedAt);
+    }
+
     public static TimeEntryResponse from(TimeEntry te) {
         Project project = te.getProject();
         Client client = project.getClient();

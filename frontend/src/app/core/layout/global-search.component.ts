@@ -10,7 +10,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { debounceTime, distinctUntilChanged, Subject, switchMap } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
 import { ClientApiService } from '../api/client-api.service';
 import { ProjectApiService } from '../api/project-api.service';
 import { TimeEntryApiService } from '../api/time-entry-api.service';
@@ -169,14 +169,13 @@ export class GlobalSearchComponent {
           this.clients.set(
             this.allClients.filter((c) => c.name.toLowerCase().includes(lower)).slice(0, 4),
           );
-          return this.entryApi.list({ q, size: 6 });
+          // Errors end only this search, not the whole query stream.
+          return this.entryApi.list({ q, size: 6 }).pipe(catchError(() => of(null)));
         }),
         takeUntilDestroyed(),
       )
       .subscribe((page) => {
-        if ('content' in page) {
-          this.entries.set(page.content);
-        }
+        this.entries.set(page && 'content' in page ? page.content : []);
         this.loading.set(false);
       });
   }
@@ -194,6 +193,8 @@ export class GlobalSearchComponent {
   protected close(): void {
     this.open.set(false);
     this.query = '';
+    // Resets distinctUntilChanged, so the same query typed again searches again.
+    this.query$.next('');
     this.entries.set([]);
     this.projects.set([]);
     this.clients.set([]);

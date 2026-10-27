@@ -216,6 +216,7 @@ type DetailRow =
             @if (forecast(); as fc) { <div class="stat-forecast">Prognose {{ forecastRatio(s, fc) * 100 | number: '1.0-0' }}%</div> }
           </div>
           <div class="card card-pad"><div class="card-title">Umsatz</div><div class="stat-value mono">{{ s.revenueAmount | money: s.currencyCode }}</div>
+            @if (s.mixedCurrencies) { <div><span class="badge warn" title="Umsatz enthält Einträge in verschiedenen Währungen; sie werden ohne Umrechnung summiert.">gemischte Währungen</span></div> }
             @if (forecast(); as fc) { <div class="stat-forecast mono">Prognose {{ sum(s.revenueAmount, fc.revenueAmount) | money: s.currencyCode }}</div> }
           </div>
         </div>
@@ -972,16 +973,22 @@ export class ReportsComponent {
     });
   }
 
+  /** Only responses of the latest filter may set data (fast filter changes). */
+  private loadSeq = 0;
+  private detailedSeq = 0;
+
   private loadAll(filter: ReportFilter): void {
     // Positions and indices refer to the old layout.
     this.barHover.set(null);
     this.donutTip.set(null);
-    this.reportApi.summary(filter).subscribe((s) => this.summary.set(s));
-    this.reportApi.budget(filter).subscribe((b) => this.budget.set(b));
-    this.reportApi.attendance(filter.from, filter.to).subscribe((a) => this.attendance.set(a));
-    this.reportApi.dailyBreakdown(filter).subscribe((b) => this.dailyBreakdown.set(b));
+    const seq = ++this.loadSeq;
+    const latest = <T>(set: (v: T) => void) => (v: T) => { if (seq === this.loadSeq) set(v); };
+    this.reportApi.summary(filter).subscribe(latest((s) => this.summary.set(s)));
+    this.reportApi.budget(filter).subscribe(latest((b) => this.budget.set(b)));
+    this.reportApi.attendance(filter.from, filter.to).subscribe(latest((a) => this.attendance.set(a)));
+    this.reportApi.dailyBreakdown(filter).subscribe(latest((b) => this.dailyBreakdown.set(b)));
     if (filter.forecast && (filter.to ?? '') > this.today) {
-      this.reportApi.forecast(filter).subscribe((fc) => this.forecast.set(fc));
+      this.reportApi.forecast(filter).subscribe(latest((fc) => this.forecast.set(fc)));
     } else {
       this.forecast.set(null);
     }
@@ -989,9 +996,10 @@ export class ReportsComponent {
   }
 
   private loadDetailed(filter: ReportFilter): void {
+    const seq = ++this.detailedSeq;
     this.reportApi
       .detailed({ ...filter, page: this.page(), size: 25 })
-      .subscribe((d) => this.detailed.set(d));
+      .subscribe((d) => { if (seq === this.detailedSeq) this.detailed.set(d); });
   }
 
   drillable(s: SummaryReport): boolean {

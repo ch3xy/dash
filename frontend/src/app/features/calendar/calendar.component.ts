@@ -27,7 +27,7 @@ import { loadViewSetting, persistQueryParams, saveViewSetting } from '../../core
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { DateRange, parseIsoDate, weekRange } from '../../shared/utils/date-range';
-import { addDays, timeOf, toInstant, toIsoDate } from '../../shared/utils/date-utils';
+import { addDays, intervalFromFields, timeOf, toInstant, toIsoDate } from '../../shared/utils/date-utils';
 import { LucideLock, LucideUnfoldVertical, LucideX, LucideZoomIn, LucideZoomOut } from '@lucide/angular';
 import { MonthLockStateService } from '../../core/month-lock-state.service';
 import { MonthLockedBannerComponent } from '../../shared/components/month-locked-banner.component';
@@ -204,7 +204,7 @@ type Interact =
               </div>
               <div class="field">
                 <label>Task</label>
-                <select class="select" [(ngModel)]="form.taskId">
+                <select class="select" [(ngModel)]="form.taskId" (ngModelChange)="onTaskChange()">
                   <option [ngValue]="null">—</option>
                   @for (t of tasks(); track t.id) {
                     <option [ngValue]="t.id">{{ t.name }}</option>
@@ -384,6 +384,10 @@ export class CalendarComponent implements OnDestroy {
   protected formDate = '';
   protected formStart = '';
   protected formEnd = '';
+  /** Entry open in the editor, to keep its exact instants when the times are not changed. */
+  private editingEntry: TimeEntry | null = null;
+  /** Only the latest week request may set the grid (fast week stepping). */
+  private loadSeq = 0;
 
   protected readonly columns = computed<DayColumn[]>(() => {
     const hourPx = this.hourPx();
@@ -475,13 +479,16 @@ export class CalendarComponent implements OnDestroy {
     this.loading.set(true);
     const from = toIsoDate(this.weekStart);
     const to = toIsoDate(addDays(this.weekStart, 6));
+    const seq = ++this.loadSeq;
     this.api.list({ from, to, size: 500 }).subscribe({
       next: (page) => {
+        if (seq !== this.loadSeq) return;
         this.entries.set(page.content);
         this.loading.set(false);
         this.loaded.set(true);
       },
       error: () => {
+        if (seq !== this.loadSeq) return;
         this.loading.set(false);
         this.loaded.set(true);
       },
@@ -732,7 +739,8 @@ export class CalendarComponent implements OnDestroy {
       this.openNewEntry(ix.colDate, ix.startMin, ix.endMin);
     } else if (ix.kind === 'move') {
       if (ix.colDate !== ix.entry.entryDate || ix.startMin !== this.entryStartMin(ix.entry)) {
-        this.patchEntry(ix.entry, ix.colDate, ix.startMin, ix.startMin + ix.durationMin);
+        // Only the start snaps; the exact duration (incl. seconds) is kept.
+        this.patchEntry(ix.entry, ix.colDate, ix.startMin, null);
       }
     } else if (ix.endMin !== this.resizeInteract(ix.entry, ix.colDate).endMin) {
       this.patchEntry(ix.entry, ix.colDate, ix.startMin, ix.endMin);
@@ -770,6 +778,7 @@ export class CalendarComponent implements OnDestroy {
   private openNewEntry(date: string, startMin: number, endMin: number): void {
     this.form = this.emptyForm();
     this.editingId.set(null);
+    this.editingEntry = null;
     this.formDate = date;
     this.formStart = this.minutesToTime(startMin);
     this.formEnd = this.minutesToTime(Math.min(endMin, DAY_MIN - 1));
@@ -788,7 +797,9 @@ export class CalendarComponent implements OnDestroy {
       tagIds: entry.tags.map((t) => t.id),
     };
     this.editingId.set(entry.id);
-    this.formDate = entry.entryDate;
+    this.editingEntry = entry;
+    // The dialog date is the start day (entryDate is the end day for entries over midnight).
+    this.formDate = toIsoDate(new Date(entry.startTime));
     this.formStart = timeOf(entry.startTime);
     this.formEnd = timeOf(entry.endTime);
     this.tasks.set([]);
@@ -800,10 +811,22 @@ export class CalendarComponent implements OnDestroy {
 
   protected onProjectChange(): void {
     this.form.taskId = null;
+    if (!this.editingId()) {
+      const project = this.projects().find((p) => p.id === this.form.projectId);
+      if (project) this.form.billable = project.billableByDefault;
+    }
     this.tasks.set([]);
     if (this.form.projectId) {
       this.taskApi.getForProject(this.form.projectId).subscribe((t) => this.tasks.set(t));
     }
+  }
+
+  protected onTaskChange(): void {
+    if (this.editingId()) return;
+    const task = this.tasks().find((t) => t.id === this.form.taskId);
+    const project = this.projects().find((p) => p.id === this.form.projectId);
+    const def = task?.billableByDefault ?? project?.billableByDefault;
+    if (def !== undefined) this.form.billable = def;
   }
 
   protected toggleTag(id: Uuid): void {
@@ -813,11 +836,12 @@ export class CalendarComponent implements OnDestroy {
 
   protected saveEntry(): void {
     if (!this.form.projectId) return;
-    const payload: TimeEntryInput = {
-      ...this.form,
-      startTime: toInstant(this.formDate, this.formStart),
-      endTime: toInstant(this.formDate, this.formEnd),
-    };
+    const interval = intervalFromFields(this.formDate, this.formStart, this.formEnd, this.editingEntry ?? undefined);
+    if (!interval) {
+      this.toast.error('Datum, Start und Ende angeben');
+      return;
+    }
+    const payload: TimeEntryInput = { ...this.form, ...interval };
     const id = this.editingId();
     const req = id ? this.api.update(id, payload) : this.api.create(payload);
     req.subscribe(() => {
@@ -851,10 +875,18 @@ export class CalendarComponent implements OnDestroy {
 
   // ─── Patch helper ───────────────────────────────────────────────────────────
 
-  /** Saves a moved/resized entry. The grid updates immediately and is reloaded from the server afterwards. */
-  private patchEntry(entry: TimeEntry, colDate: string, startMin: number, endMin: number): void {
-    const startTime = this.instantAt(colDate, startMin);
-    const endTime = this.instantAt(colDate, endMin);
+  /**
+   * Saves a moved/resized entry. The grid updates immediately and is reloaded from the server
+   * afterwards. {@code endMin} null (move) keeps the entry's exact duration.
+   */
+  private patchEntry(entry: TimeEntry, colDate: string, startMin: number, endMin: number | null): void {
+    // An unchanged start (resize) keeps its seconds.
+    const startTime = colDate === entry.entryDate && startMin === this.entryStartMin(entry)
+      ? entry.startTime : this.instantAt(colDate, startMin);
+    const endTime = endMin === null
+      ? new Date(new Date(startTime).getTime() + entry.durationSeconds * 1000).toISOString()
+      : this.instantAt(colDate, endMin);
+    const durationSeconds = endMin === null ? entry.durationSeconds : (endMin - startMin) * 60;
     const payload: TimeEntryInput = {
       projectId: entry.projectId,
       taskId: entry.taskId,
@@ -865,7 +897,7 @@ export class CalendarComponent implements OnDestroy {
       endTime,
     };
     this.entries.update((list) => list.map((e) => e.id === entry.id
-      ? { ...e, entryDate: colDate, startTime, endTime, durationSeconds: (endMin - startMin) * 60 }
+      ? { ...e, entryDate: colDate, startTime, endTime, durationSeconds }
       : e));
     this.api.update(entry.id, payload).subscribe({
       next: () => {

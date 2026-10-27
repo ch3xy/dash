@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ProjectApiService } from '../../core/api/project-api.service';
@@ -22,6 +22,7 @@ import { ProjectFormDialogComponent } from './project-form-dialog.component';
 
 type Tab = 'tasks' | 'rates';
 
+import { nonNegativeError } from '../../shared/utils/form-checks';
 @Component({
   selector: 'app-project-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -114,10 +115,16 @@ type Tab = 'tasks' | 'rates';
         } @else {
           <div class="card card-pad mt-4">
             <div class="form-row" style="align-items: flex-end;">
-              <div class="field"><label>Neuer Stundensatz</label><input class="input mono" type="number" [(ngModel)]="rateValue" /></div>
-              <div class="field"><label>Gültig ab</label><input class="input" type="date" [(ngModel)]="rateFrom" /></div>
+              <div class="field">
+                <label>Neuer Stundensatz</label><input class="input mono" type="number" min="0" [(ngModel)]="rateValue" />
+                @if (nonNegativeError(rateValue); as e) { <span class="field-error">{{ e }}</span> }
+              </div>
+              <div class="field">
+                <label>Gültig ab</label><input class="input" type="date" [(ngModel)]="rateFrom" />
+                @if (rateFromError(); as e) { <span class="field-error">{{ e }}</span> }
+              </div>
               <div class="field"><label>Notiz</label><input class="input" [(ngModel)]="rateNote" /></div>
-              <button class="btn btn-primary" (click)="addRate(p)" [disabled]="!rateValue || !rateFrom">Hinzufügen</button>
+              <button class="btn btn-primary" (click)="addRate(p)" [disabled]="rateValue == null || !rateFrom || nonNegativeError(rateValue) || rateFromError()">Hinzufügen</button>
             </div>
             <table class="table mt-4">
               <thead><tr><th>Satz</th><th>Gültig ab</th><th>Gültig bis</th><th>Notiz</th></tr></thead>
@@ -156,15 +163,19 @@ type Tab = 'tasks' | 'rates';
             <div class="form-row">
               <div class="field">
                 <label>Stundensatz-Override</label>
-                <input class="input mono" type="number" [(ngModel)]="taskRate" placeholder="Projektsatz" />
+                <input class="input mono" type="number" min="0" [(ngModel)]="taskRate" placeholder="Projektsatz" />
+                @if (nonNegativeError(taskRate); as e) { <span class="field-error">{{ e }}</span> }
               </div>
-              <div class="field"><label>Schätzung (h)</label><input class="input mono" type="number" [(ngModel)]="taskEstimateHours" /></div>
+              <div class="field">
+                <label>Schätzung (h)</label><input class="input mono" type="number" min="0" [(ngModel)]="taskEstimateHours" />
+                @if (nonNegativeError(taskEstimateHours); as e) { <span class="field-error">{{ e }}</span> }
+              </div>
             </div>
             <label class="switch"><input type="checkbox" [(ngModel)]="taskForm.billableByDefault" /> Standardmäßig abrechenbar</label>
           </div>
           <div class="dialog-footer">
             <button class="btn" (click)="closeTask()">Abbrechen</button>
-            <button class="btn btn-primary" (click)="saveTask(t)" [disabled]="!taskForm.name.trim()">Speichern</button>
+            <button class="btn btn-primary" (click)="saveTask(t)" [disabled]="!taskForm.name.trim() || nonNegativeError(taskRate) || nonNegativeError(taskEstimateHours)">Speichern</button>
           </div>
         </div>
       </div>
@@ -215,21 +226,33 @@ export class ProjectDetailComponent {
   protected rateNote = '';
 
   constructor() {
-    queueMicrotask(() => this.loadAll());
+    // The router reuses this component when only :id changes (e.g. via global search).
+    effect(() => {
+      const id = this.id();
+      untracked(() => {
+        this.project.set(null);
+        this.budget.set(null);
+        this.tasks.set([]);
+        this.rates.set([]);
+        this.taskSeconds.set({});
+        this.loadAll(id);
+      });
+    });
   }
 
-  private loadAll(): void {
-    const id = this.id();
-    this.api.get(id).subscribe((p) => this.project.set(p));
-    this.api.budgetStatus(id).subscribe((b) => this.budget.set(b));
-    this.loadTasks();
-    this.api.rates(id).subscribe((r) => this.rates.set(r));
+  private loadAll(id = this.id()): void {
+    // Responses for a project that is no longer shown are dropped.
+    const current = <T>(set: (v: T) => void) => (v: T) => { if (this.id() === id) set(v); };
+    this.api.get(id).subscribe(current((p) => this.project.set(p)));
+    this.api.budgetStatus(id).subscribe(current((b) => this.budget.set(b)));
+    this.loadTasks(id);
+    this.api.rates(id).subscribe(current((r) => this.rates.set(r)));
   }
 
-  private loadTasks(): void {
-    const id = this.id();
-    this.taskApi.getForProject(id, true).subscribe((t) => this.tasks.set(t));
+  private loadTasks(id = this.id()): void {
+    this.taskApi.getForProject(id, true).subscribe((t) => { if (this.id() === id) this.tasks.set(t); });
     this.reportApi.summary({ projectId: id, groupBy: 'TASK' }).subscribe((s) => {
+      if (this.id() !== id) return;
       const map: Record<string, number> = {};
       for (const g of s.groups) {
         if (g.key) {
@@ -306,8 +329,18 @@ export class ProjectDetailComponent {
     this.editingTask.set(null);
   }
 
+  protected readonly nonNegativeError = nonNegativeError;
+
+  /** Rates are chronological: a new rate must start after the latest one (backend rule). */
+  protected rateFromError(): string | null {
+    const latest = this.rates().reduce<string | null>(
+      (max, r) => (max === null || r.validFrom > max ? r.validFrom : max), null);
+    return this.rateFrom && latest && this.rateFrom <= latest.slice(0, 10)
+      ? `Muss nach dem ${latest.slice(0, 10)} liegen (Beginn des letzten Satzes)` : null;
+  }
+
   saveTask(t: Task): void {
-    if (!this.taskForm.name.trim()) {
+    if (!this.taskForm.name.trim() || nonNegativeError(this.taskRate) || nonNegativeError(this.taskEstimateHours)) {
       return;
     }
     const payload: TaskInput = {
@@ -324,7 +357,7 @@ export class ProjectDetailComponent {
   }
 
   addRate(p: Project): void {
-    if (this.rateValue == null || !this.rateFrom) {
+    if (this.rateValue == null || !this.rateFrom || nonNegativeError(this.rateValue) || this.rateFromError()) {
       return;
     }
     this.api

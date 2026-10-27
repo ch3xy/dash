@@ -88,7 +88,7 @@ import { MoneyPipe } from '../../shared/pipes/money.pipe';
                   <td class="num">{{ m.entryCount }}</td>
                   <td class="num mono">{{ m.totalSeconds | duration: 'HH:MM' }}</td>
                   <td class="num mono">{{ m.billableSeconds | duration: 'HH:MM' }}</td>
-                  <td class="num mono">{{ m.revenue | money: m.currency }}</td>
+                  <td class="num mono">{{ m.revenue | money: m.currency }}@if (m.mixedCurrencies) { <span class="badge warn" title="Umsatz enthält Einträge in verschiedenen Währungen; sie werden ohne Umrechnung summiert.">gemischt</span> }</td>
                   <td>
                     @if (m.locked) {
                       <span class="badge ok" [title]="m.note ?? ''"><svg lucideLock [size]="12"></svg> Abgeschlossen</span>

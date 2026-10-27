@@ -21,6 +21,8 @@ export interface MonthClosing {
   billableSeconds: number;
   revenue: number;
   currency: string;
+  /** Revenue sums entries in different currencies without conversion. */
+  mixedCurrencies: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

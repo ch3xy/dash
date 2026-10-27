@@ -23,7 +23,8 @@ public record DashboardResponse(
             long durationSeconds,
             long billableDurationSeconds,
             BigDecimal revenueAmount,
-            String currencyCode
+            String currencyCode,
+            boolean mixedCurrencies
     ) {}
 
     public record BudgetAlert(

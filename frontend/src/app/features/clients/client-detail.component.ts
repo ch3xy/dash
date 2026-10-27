@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ClientApiService } from '../../core/api/client-api.service';
 import { ProjectApiService } from '../../core/api/project-api.service';
@@ -122,17 +122,27 @@ export class ClientDetailComponent {
   protected readonly websiteHref = websiteHref;
 
   constructor() {
-    queueMicrotask(() => this.loadAll());
+    // The router reuses this component when only :id changes (e.g. via global search).
+    effect(() => {
+      const id = this.id();
+      untracked(() => {
+        this.client.set(null);
+        this.projects.set([]);
+        this.summary.set(null);
+        this.loadAll(id);
+      });
+    });
   }
 
-  private loadAll(): void {
-    const id = this.id();
-    this.api.get(id).subscribe((c) => this.client.set(c));
+  private loadAll(id = this.id()): void {
+    // Responses for a client that is no longer shown are dropped.
+    const current = <T>(set: (v: T) => void) => (v: T) => { if (this.id() === id) set(v); };
+    this.api.get(id).subscribe(current((c) => this.client.set(c)));
     // The project endpoint has no client filter; the list is small, so filter here.
     this.projectApi
       .getAll({ archived: true })
-      .subscribe((all) => this.projects.set(all.filter((p) => p.clientId === id)));
-    this.reportApi.summary({ clientId: id, groupBy: 'PROJECT' }).subscribe((s) => this.summary.set(s));
+      .subscribe(current((all) => this.projects.set(all.filter((p) => p.clientId === id))));
+    this.reportApi.summary({ clientId: id, groupBy: 'PROJECT' }).subscribe(current((s) => this.summary.set(s)));
     this.reportApi.budget({}).subscribe((rows) => {
       this.budgets.set(Object.fromEntries(rows.map((r) => [r.projectId, r])));
     });

@@ -95,7 +95,7 @@ class ExtendedReportIntegrationTest extends AbstractIntegrationTest {
         ReportFilter filter = new ReportFilter(
                 LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30),
                 null, project.id(), null, null, null, null, null);
-        byte[] xlsx = xlsxExportService.export(filter);
+        byte[] xlsx = xlsxExportService.export(filter, DurationRounding.NONE);
 
         // XLSX files are ZIP archives → start with the "PK" magic bytes.
         assertThat(xlsx).isNotEmpty();

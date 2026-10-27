@@ -27,7 +27,7 @@ public class CsvExportService {
         this.settingsService = settingsService;
     }
 
-    public String export(ReportFilter filter) {
+    public String export(ReportFilter filter, DurationRounding rounding) {
         ZoneId zone = settingsService.getTimezone();
         DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm").withZone(zone);
 
@@ -44,8 +44,8 @@ public class CsvExportService {
                         nullToEmpty(e.description()),
                         timeFmt.format(e.startTime()),
                         timeFmt.format(e.endTime()),
-                        ReportExportColumns.formatDuration(e.durationSeconds()),
-                        ReportExportColumns.decimalHours(e.durationSeconds()),
+                        ReportExportColumns.formatDuration(rounding.apply(e.durationSeconds())),
+                        ReportExportColumns.decimalHours(rounding.apply(e.durationSeconds())),
                         e.billable() ? "Yes" : "No",
                         e.hourlyRateSnapshot() != null ? e.hourlyRateSnapshot().toPlainString() : "",
                         nullToEmpty(e.currencyCodeSnapshot()),

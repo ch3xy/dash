@@ -71,6 +71,6 @@ public class ClientService {
         client.setDescription(req.description());
         client.setEmail(req.email());
         client.setWebsite(req.website());
-        client.setCurrencyCode(req.currencyCode());
+        client.setCurrencyCode(req.currencyCode() == null || req.currencyCode().isBlank() ? null : req.currencyCode());
     }
 }

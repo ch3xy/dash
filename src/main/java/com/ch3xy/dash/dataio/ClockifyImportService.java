@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.UncheckedIOException;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,10 +43,12 @@ public class ClockifyImportService {
                 .build();
 
         try (CSVParser parser = CSVParser.parse(new StringReader(csv), format)) {
-            for (CSVRecord record : parser) {
+            List<CSVRecord> records = parser.getRecords();
+            DateTimeFormatter slashDateFormat = ClockifyRowImporter.detectSlashDateFormat(records, warnings);
+            for (CSVRecord record : records) {
                 rowNumber++;
                 try {
-                    switch (rowImporter.importRow(record, counters)) {
+                    switch (rowImporter.importRow(record, counters, slashDateFormat)) {
                         case IMPORTED -> imported++;
                         case DUPLICATE -> duplicates++;
                         case INVALID -> warnings.add("Row " + rowNumber + ": skipped (missing or invalid start/end)");

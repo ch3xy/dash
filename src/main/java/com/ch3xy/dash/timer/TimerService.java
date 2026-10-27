@@ -95,8 +95,10 @@ public class TimerService {
             now = timer.getStartTime().plusSeconds(1);
         }
 
+        // The UI sends its current text on stop, so an edit not yet saved by the PATCH is not
+        // lost; "" clears the description, null keeps the timer's.
         String description = req != null && req.description() != null
-                ? req.description()
+                ? blankToNull(req.description())
                 : timer.getDescription();
 
         Set<UUID> tagIds = timer.getTags().stream().map(Tag::getId).collect(Collectors.toSet());
@@ -125,15 +127,19 @@ public class TimerService {
     public TimerResponse update(TimerUpdateRequest req) {
         RunningTimer timer = currentOrThrow();
         if (req.projectId() != null) {
+            // With a project, taskId is taken as given: null clears the task. This keeps a
+            // task of the previous project from blocking the stop.
             Project project = requireProject(req.projectId());
-            project.requireNotArchived();
+            if (!project.getId().equals(timer.getProject().getId())) {
+                project.requireNotArchived();
+            }
             timer.setProject(project);
-        }
-        if (req.taskId() != null) {
+            timer.setTask(resolveTask(req.taskId(), project));
+        } else if (req.taskId() != null) {
             timer.setTask(resolveTask(req.taskId(), timer.getProject()));
         }
         if (req.description() != null) {
-            timer.setDescription(req.description());
+            timer.setDescription(blankToNull(req.description())); // "" clears
         }
         if (req.billable() != null) {
             timer.setBillable(req.billable());
@@ -157,6 +163,10 @@ public class TimerService {
                 tagIds
         );
         return start(req);
+    }
+
+    private static String blankToNull(String s) {
+        return s.isBlank() ? null : s;
     }
 
     private RunningTimer currentOrThrow() {

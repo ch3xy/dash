@@ -66,7 +66,7 @@ export function parseDuration(input: string): number | null {
       <div class="page-header">
         <h1>Timesheet</h1>
         <div class="page-controls">
-          <button class="btn btn-sm" (click)="copyPreviousWeek()" [disabled]="saving() || weekLocked()"
+          <button class="btn btn-sm" (click)="copyPreviousWeek()" [disabled]="saving() || savingCells().size > 0 || weekLocked()"
                   [title]="weekLocked() ? 'Woche liegt in einem abgeschlossenen Monat' : ''">Vorwoche kopieren</button>
           <app-date-range-picker mode="week" ariaLabel="Woche" [range]="week()" (rangeChange)="setWeek($event)" />
         </div>
@@ -112,7 +112,7 @@ export function parseDuration(input: string): number | null {
                         class="cell-input mono"
                         [value]="row.byDate[d.date] ? (row.byDate[d.date] | duration: 'HH:MM') : ''"
                         placeholder="·"
-                        [disabled]="saving()"
+                        [disabled]="saving() || savingCells().has(row.key + '|' + d.date)"
                         [readOnly]="lockState.isLocked(d.date)"
                         [attr.aria-label]="row.projectName + (row.taskName ? ' · ' + row.taskName : '') + ' am ' + d.date"
                         (focus)="$any($event.target).select()"
@@ -182,7 +182,11 @@ export class TimesheetComponent {
   protected readonly projects = signal<Project[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal(false);
+  /** Week-wide operation (copy week) in progress; disables all cells. */
   protected readonly saving = signal(false);
+  /** Cells ("rowKey|date") being saved; only these are disabled, so Tab entry keeps working. */
+  protected readonly savingCells = signal<ReadonlySet<string>>(new Set());
+  private loadSeq = 0;
   protected readonly lockState = inject(MonthLockStateService);
   /** Displayed Mon–Sun week from the URL (?week=YYYY-MM-DD), defaulting to the current week. */
   protected readonly week = toSignal(
@@ -261,12 +265,15 @@ export class TimesheetComponent {
   load(): void {
     this.loading.set(true);
     this.error.set(false);
+    const seq = ++this.loadSeq;
     this.reportApi.weekly(toIsoDate(this.weekStart)).subscribe({
       next: (r) => {
+        if (seq !== this.loadSeq) return;
         this.report.set(r);
         this.loading.set(false);
       },
       error: () => {
+        if (seq !== this.loadSeq) return;
         this.error.set(true);
         this.loading.set(false);
       },
@@ -335,14 +342,16 @@ export class TimesheetComponent {
         return;
       }
     }
-    this.saving.set(true);
+    const cell = `${row.key}|${date}`;
+    const done = () => this.savingCells.update((s) => { const n = new Set(s); n.delete(cell); return n; });
+    this.savingCells.update((s) => new Set(s).add(cell));
     this.timesheetApi.setCell({ projectId: row.projectId, taskId: row.taskId, date, durationSeconds: seconds }).subscribe({
       next: () => {
-        this.saving.set(false);
+        done();
         this.load();
       },
       error: () => {
-        this.saving.set(false);
+        done();
         input.value = this.format(current);
       },
     });

@@ -25,7 +25,7 @@ export class TimerApiService {
   }
 
   stop(description?: string): Observable<TimeEntry> {
-    return this.http.post<TimeEntry>('/timer/stop', description ? { description } : {});
+    return this.http.post<TimeEntry>('/timer/stop', description !== undefined ? { description } : {});
   }
 
   discard(): Observable<void> {

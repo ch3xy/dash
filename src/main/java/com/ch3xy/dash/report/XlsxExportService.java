@@ -33,7 +33,7 @@ public class XlsxExportService {
         this.settingsService = settingsService;
     }
 
-    public byte[] export(ReportFilter filter) {
+    public byte[] export(ReportFilter filter, DurationRounding rounding) {
         ZoneId zone = settingsService.getTimezone();
         DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm").withZone(zone);
         List<TimeEntryResponse> rows = rowFetcher.fetch(filter);
@@ -66,8 +66,8 @@ public class XlsxExportService {
                 row.createCell(c++).setCellValue(nullToEmpty(e.description()));
                 row.createCell(c++).setCellValue(timeFmt.format(e.startTime()));
                 row.createCell(c++).setCellValue(timeFmt.format(e.endTime()));
-                row.createCell(c++).setCellValue(ReportExportColumns.formatDuration(e.durationSeconds()));
-                row.createCell(c++).setCellValue(Double.parseDouble(ReportExportColumns.decimalHours(e.durationSeconds())));
+                row.createCell(c++).setCellValue(ReportExportColumns.formatDuration(rounding.apply(e.durationSeconds())));
+                row.createCell(c++).setCellValue(Double.parseDouble(ReportExportColumns.decimalHours(rounding.apply(e.durationSeconds()))));
                 row.createCell(c++).setCellValue(e.billable() ? "Yes" : "No");
                 row.createCell(c++).setCellValue(e.hourlyRateSnapshot() != null ? e.hourlyRateSnapshot().doubleValue() : 0d);
                 row.createCell(c++).setCellValue(nullToEmpty(e.currencyCodeSnapshot()));

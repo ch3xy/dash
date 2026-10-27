@@ -16,5 +16,6 @@ public record MonthClosingResponse(
         @Schema(description = "Gesamtdauer in Sekunden") long totalSeconds,
         @Schema(description = "Abrechenbare Dauer in Sekunden") long billableSeconds,
         @Schema(description = "Umsatz aus abrechenbaren Einträgen") BigDecimal revenue,
-        @Schema(description = "Währung des Umsatzes") String currency) {
+        @Schema(description = "Währung des Umsatzes") String currency,
+        @Schema(description = "true, wenn der Umsatz Einträge in verschiedenen Währungen summiert (ohne Umrechnung)") boolean mixedCurrencies) {
 }

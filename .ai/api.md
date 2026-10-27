@@ -163,6 +163,8 @@ Body: `{ "status": "ARCHIVED" }`
 }
 ```
 
+Ohne Stundenbudget: `status = "NO_BUDGET"`, `usedMinutes` und `revenueAmount` werden trotzdem geliefert.
+
 ### `GET /projects/{id}/rates` → `200` Liste von ProjectRate
 
 ```json
@@ -191,7 +193,7 @@ Body:
 }
 ```
 
-Schließt automatisch die aktuelle Rate ab (`validTo = validFrom des neuen`).
+Schließt automatisch die aktuelle Rate ab (`validTo = validFrom des neuen`). `validFrom` muss nach dem Beginn der jüngsten Rate liegen, sonst `422` (Historie bleibt lückenlos und überschneidungsfrei). Satz ≥ 0, Währung 3 Buchstaben.
 
 ---
 
@@ -393,6 +395,8 @@ Live-Update laufender Timer (Beschreibung, Projekt, Task, Tags, Billable):
   "tagIds": []
 }
 ```
+`null`-Felder bleiben unverändert. Ausnahme: Ist `projectId` gesetzt, wird `taskId` immer übernommen
+(`null` entfernt den Task), damit kein Task eines anderen Projekts am Timer hängen bleibt.
 
 ---
 
@@ -400,7 +404,7 @@ Live-Update laufender Timer (Beschreibung, Projekt, Task, Tags, Billable):
 
 ### `PUT /timesheet/cell` → `204`
 
-Setzt die Gesamtdauer einer Zelle (Projekt + optional Task an einem Tag). Mehr Zeit wird als neuer Eintrag nach dem letzten Eintrag des Tages angehängt (sonst ab 09:00 App-Zeitzone; Billable aus Task- bzw. Projekt-Default). Weniger Zeit kürzt die jüngsten Einträge der Zelle und löscht solche, die auf 0 schrumpfen.
+Setzt die Gesamtdauer einer Zelle (Projekt + optional Task an einem Tag). Mehr Zeit wird als neuer Eintrag nach dem letzten Eintrag des Tages angehängt (sonst ab 09:00 App-Zeitzone; Billable aus Task- bzw. Projekt-Default). Würde er über Mitternacht in den Folgetag laufen, wird er vor den ersten Eintrag des Tages gelegt; passt er auch dort nicht, `422`. Weniger Zeit kürzt die jüngsten Einträge der Zelle und löscht solche, die auf 0 schrumpfen. Kürzen verschiebt bei einem Eintrag, der am Vortag begann, den Start statt des Endes, damit er beim Tag bleibt.
 ```json
 { "projectId": "uuid", "taskId": "uuid|null", "date": "2026-10-01", "durationSeconds": 5400 }
 ```
@@ -445,6 +449,7 @@ Alle Reports: Query-Params als Filter.
   "billableRatio": 0.75,
   "revenueAmount": "4590.00",
   "currencyCode": "EUR",
+  "mixedCurrencies": false,
   "groupedBy": "PROJECT",
   "groups": [
     {
@@ -461,7 +466,9 @@ Alle Reports: Query-Params als Filter.
 
 ### `GET /reports/detailed`
 
-Paginierte Liste aller TimeEntries mit Filter (s. `/time-entries` Response).
+Paginierte Liste aller TimeEntries mit Filter (s. `/time-entries` Response). `rounded=true` rundet `durationSeconds` je Eintrag gemäß Rundungsregel; Beträge bleiben Snapshots der Rohdauer.
+
+`currencyCode` (Summary, Revenue, Dashboard) ist die einzige Umsatzwährung, sonst die App-Währung; `mixedCurrencies = true`, wenn Einträge verschiedener Währungen ohne Umrechnung summiert wurden.
 
 ### `GET /reports/weekly`
 
@@ -562,7 +569,8 @@ Gleiche Filter wie `/summary` plus `rounded`. Prognose für die Tage **nach heut
 ### `GET /reports/export.csv`
 
 Header: `Content-Disposition: attachment; filename="report-2026-06.csv"`  
-Spalten: Date, Client, Project, Task, Description, Start, End, Duration, Billable, Rate, Amount, Tags
+Spalten: Date, Client, Project, Task, Description, Start, End, Duration, Billable, Rate, Amount, Tags  
+`rounded=true` exportiert gerundete Dauern (auch XLSX); Amount bleibt der Snapshot.
 
 ### `GET /reports/export.xlsx`
 
@@ -644,7 +652,7 @@ Monate mit Einträgen oder Sperre plus Vormonat, neueste zuerst:
 ```json
 [{ "month": "2026-09", "locked": true, "lockedAt": "2026-10-07T14:00:00Z", "note": "RE-2026-09",
    "lockable": false, "entryCount": 84, "totalSeconds": 540000, "billableSeconds": 500000,
-   "revenue": 12500.00, "currency": "EUR" }]
+   "revenue": 12500.00, "currency": "EUR", "mixedCurrencies": false }]
 ```
 
 ### `GET /closing/locks` → `200`
@@ -679,6 +687,8 @@ Kunden/Projekte/Tasks/Tags an (find-or-create), importiert je Zeile in eigener T
 }
 ```
 
+Datumsformat mit Schrägstrich wird einmal pro Datei erkannt (Teil > 12 entscheidet DD/MM vs. MM/DD); uneindeutig → DD/MM/YYYY plus Warnung.
+
 ### `GET /backup` → `200`
 
 Vollständiger JSON-Snapshot aller Daten. `Content-Disposition: attachment; filename="dash-backup.json"`.
@@ -704,7 +714,7 @@ Original-IDs und aller Snapshots (Stundensatz, Betrag, Ratenhistorie bleiben rep
 
 Vor dem Wipe wird das Dokument geprüft: `settings`, `clients`, `projects`, `projectRates`,
 `tasks`, `tags` und `timeEntries` müssen vorhanden sein (leere Listen sind erlaubt), und die
-Settings müssen gültig sein. Sonst `422` und es wird nichts gelöscht.
+Settings müssen gültig sein; Pflichtfelder je Datensatz (z. B. `projects[0].status`) werden geprüft. Sonst `422` und es wird nichts gelöscht.
 
 ```json
 { "clients": 3, "projects": 5, "projectRates": 4, "tasks": 8, "tags": 4, "timeEntries": 120 }

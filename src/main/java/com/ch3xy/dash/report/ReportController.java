@@ -78,8 +78,9 @@ public class ReportController {
     @GetMapping("/detailed")
     public ResponseEntity<PageResponse<TimeEntryResponse>> detailed(
             @ParameterObject FilterParams params,
-            @ParameterObject Pageable pageable) {
-        return ResponseEntity.ok(PageResponse.of(service.getDetailed(params.toFilter(), pageable)));
+            @ParameterObject Pageable pageable,
+            @Parameter(description = "Wenn true, wird die Dauer jedes Eintrags gemäß der App-Rundungsregel gerundet. Beträge bleiben die gespeicherten Snapshots (Rohdauer).") @RequestParam(defaultValue = "false") boolean rounded) {
+        return ResponseEntity.ok(PageResponse.of(service.getDetailed(params.toFilter(), pageable, rounded)));
     }
 
     @Operation(
@@ -159,8 +160,10 @@ public class ReportController {
             description = "Exportiert alle gefilterten Zeiteinträge als CSV-Datei (UTF-8, Semikolon-getrennt). Der Content-Disposition-Header triggert den Browser-Download."
     )
     @GetMapping("/export.csv")
-    public ResponseEntity<byte[]> exportCsv(@ParameterObject FilterParams params) {
-        byte[] body = csvExportService.export(params.toFilter()).getBytes(StandardCharsets.UTF_8);
+    public ResponseEntity<byte[]> exportCsv(
+            @ParameterObject FilterParams params,
+            @Parameter(description = "Wenn true, werden die Dauer-Spalten gemäß der App-Rundungsregel gerundet. Beträge bleiben die gespeicherten Snapshots (Rohdauer).") @RequestParam(defaultValue = "false") boolean rounded) {
+        byte[] body = csvExportService.export(params.toFilter(), service.rounding(rounded)).getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"report.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
@@ -172,8 +175,10 @@ public class ReportController {
             description = "Exportiert alle gefilterten Zeiteinträge als Excel-Datei (.xlsx). Der Content-Disposition-Header triggert den Browser-Download."
     )
     @GetMapping("/export.xlsx")
-    public ResponseEntity<byte[]> exportXlsx(@ParameterObject FilterParams params) {
-        byte[] body = xlsxExportService.export(params.toFilter());
+    public ResponseEntity<byte[]> exportXlsx(
+            @ParameterObject FilterParams params,
+            @Parameter(description = "Wenn true, werden die Dauer-Spalten gemäß der App-Rundungsregel gerundet. Beträge bleiben die gespeicherten Snapshots (Rohdauer).") @RequestParam(defaultValue = "false") boolean rounded) {
+        byte[] body = xlsxExportService.export(params.toFilter(), service.rounding(rounded));
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"report.xlsx\"")
                 .contentType(MediaType.parseMediaType(

@@ -1,5 +1,6 @@
 package com.ch3xy.dash.closing;
 
+import com.ch3xy.dash.common.money.RevenueCurrency;
 import com.ch3xy.dash.settings.AppSettingsService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -107,13 +108,15 @@ public class MonthLockService {
                        count(*) AS cnt,
                        COALESCE(SUM(duration_seconds), 0) AS total,
                        COALESCE(SUM(CASE WHEN billable THEN duration_seconds ELSE 0 END), 0) AS billable,
-                       COALESCE(SUM(CASE WHEN billable THEN amount_snapshot ELSE 0 END), 0) AS revenue
-                FROM time_entries
+                       COALESCE(SUM(CASE WHEN billable THEN amount_snapshot ELSE 0 END), 0) AS revenue,
+                       %s
+                FROM time_entries te
                 GROUP BY 1
-                """, rs -> {
+                """.formatted(RevenueCurrency.columns("te")), rs -> {
             stats.put(YearMonth.from(rs.getDate("month").toLocalDate()), new Stats(
                     rs.getInt("cnt"), rs.getLong("total"), rs.getLong("billable"),
-                    rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP)));
+                    rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP),
+                    RevenueCurrency.label(rs, null), RevenueCurrency.mixed(rs)));
         });
 
         YearMonth current = currentMonth();
@@ -130,7 +133,8 @@ public class MonthLockService {
                     m.toString(), lock != null, lock != null ? lock.lockedAt() : null,
                     lock != null ? lock.note() : null,
                     lock == null && m.isBefore(current),
-                    s.count(), s.totalSeconds(), s.billableSeconds(), s.revenue(), currency));
+                    s.count(), s.totalSeconds(), s.billableSeconds(), s.revenue(),
+                    s.currency() != null ? s.currency() : currency, s.mixedCurrencies()));
         }
         result.sort(Comparator.comparing(MonthClosingResponse::month).reversed());
         return result;
@@ -144,7 +148,8 @@ public class MonthLockService {
         return s == null || s.isBlank() ? null : s.trim();
     }
 
-    private record Stats(int count, long totalSeconds, long billableSeconds, BigDecimal revenue) {
-        static final Stats EMPTY = new Stats(0, 0, 0, BigDecimal.ZERO.setScale(2));
+    private record Stats(int count, long totalSeconds, long billableSeconds, BigDecimal revenue,
+                         String currency, boolean mixedCurrencies) {
+        static final Stats EMPTY = new Stats(0, 0, 0, BigDecimal.ZERO.setScale(2), null, false);
     }
 }

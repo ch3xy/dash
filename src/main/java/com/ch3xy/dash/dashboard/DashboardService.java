@@ -1,5 +1,6 @@
 package com.ch3xy.dash.dashboard;
 
+import com.ch3xy.dash.common.money.RevenueCurrency;
 import com.ch3xy.dash.dashboard.DashboardResponse.BudgetAlert;
 import com.ch3xy.dash.dashboard.DashboardResponse.PeriodStats;
 import com.ch3xy.dash.dashboard.DashboardResponse.TopClient;
@@ -83,14 +84,16 @@ public class DashboardService {
         return jdbc.queryForObject("""
                 SELECT COALESCE(SUM(duration_seconds), 0) AS seconds,
                        COALESCE(SUM(CASE WHEN billable THEN duration_seconds ELSE 0 END), 0) AS billable_seconds,
-                       COALESCE(SUM(CASE WHEN billable THEN amount_snapshot ELSE 0 END), 0) AS revenue
-                FROM time_entries
+                       COALESCE(SUM(CASE WHEN billable THEN amount_snapshot ELSE 0 END), 0) AS revenue,
+                       %s
+                FROM time_entries te
                 WHERE entry_date >= CAST(:from AS date) AND entry_date <= CAST(:to AS date)
-                """, params, (rs, rowNum) -> new PeriodStats(
+                """.formatted(RevenueCurrency.columns("te")), params, (rs, rowNum) -> new PeriodStats(
                 rs.getLong("seconds"),
                 rs.getLong("billable_seconds"),
                 rs.getBigDecimal("revenue").setScale(2, RoundingMode.HALF_UP),
-                currency));
+                RevenueCurrency.label(rs, currency),
+                RevenueCurrency.mixed(rs)));
     }
 
     private List<BudgetAlert> budgetAlerts() {

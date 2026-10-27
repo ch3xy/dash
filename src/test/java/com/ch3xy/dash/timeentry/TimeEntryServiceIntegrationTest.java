@@ -281,4 +281,25 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
         assertThat(updated.getFirst().amountSnapshot()).isEqualByComparingTo("100.00");
         assertThat(updated.getFirst().hourlyRateSnapshot()).isEqualByComparingTo("50.00");
     }
+
+    @Test
+    void splitKeepsRateSnapshotAndOriginalId() {
+        ProjectResponse project = projectWithDefaultRate();
+        TimeEntryResponse entry = service.create(new TimeEntryRequest(
+                project.id(), null, "split me", START, END, true, Set.of()));
+
+        projectService.update(project.id(), new ProjectRequest(
+                null, project.name(), null, null, true,
+                new BigDecimal("90.00"), "EUR", null, null, BudgetReset.NONE));
+
+        var halves = service.split(entry.id(), START.plusSeconds(1800));
+
+        assertThat(halves).hasSize(2);
+        assertThat(halves.get(0).id()).isEqualTo(entry.id());
+        assertThat(halves.get(0).source()).isEqualTo(TimeEntrySource.MANUAL);
+        assertThat(halves.get(1).source()).isEqualTo(TimeEntrySource.ADJUSTMENT);
+        assertThat(halves).allSatisfy(h -> assertThat(h.hourlyRateSnapshot()).isEqualByComparingTo("50.00"));
+        assertThat(halves.get(0).amountSnapshot().add(halves.get(1).amountSnapshot()))
+                .isEqualByComparingTo(entry.amountSnapshot());
+    }
 }

@@ -73,16 +73,28 @@ public class ReportService {
 
         return new SummaryReportResponse(
                 total, billable, total - billable, ratio,
-                revenue, settingsService.getCurrency(),
-                groupBy.name(), groups,
+                revenue, totals.currency() != null ? totals.currency() : settingsService.getCurrency(),
+                totals.mixedCurrencies(), groupBy.name(), groups,
                 new SummaryReportResponse.Period(filter.from(), filter.to())
         );
     }
 
     // --- Detailed --------------------------------------------------------
 
-    public Page<TimeEntryResponse> getDetailed(ReportFilter filter, Pageable pageable) {
-        return timeEntryService.findAll(toEntryFilter(filter), pageable);
+    /**
+     * With {@code rounded}, each entry's duration is rounded by the app rule (as in the
+     * summary); amounts stay the stored snapshots, which are based on the raw duration.
+     */
+    public Page<TimeEntryResponse> getDetailed(ReportFilter filter, Pageable pageable, boolean rounded) {
+        DurationRounding rounding = rounding(rounded);
+        return timeEntryService.findAll(toEntryFilter(filter), pageable)
+                .map(e -> e.withDurationSeconds(rounding.apply(e.durationSeconds())));
+    }
+
+    DurationRounding rounding(boolean rounded) {
+        return rounded
+                ? new DurationRounding(settingsService.getRoundingRule(), settingsService.getRoundingMinutes())
+                : DurationRounding.NONE;
     }
 
     // --- Budget ----------------------------------------------------------
@@ -103,7 +115,7 @@ public class ReportService {
         return new SummaryReportResponse(
                 summary.totalDurationSeconds(), summary.billableDurationSeconds(),
                 summary.nonBillableDurationSeconds(), summary.billableRatio(),
-                summary.revenueAmount(), summary.currencyCode(),
+                summary.revenueAmount(), summary.currencyCode(), summary.mixedCurrencies(),
                 summary.groupedBy(), byRevenue, summary.period()
         );
     }

@@ -1,5 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { catchError, of, tap } from 'rxjs';
+import { tap } from 'rxjs';
 import { RunningTimer, TimeEntry, TimerStartInput } from './models';
 import { TimerApiService, TimerPatch } from './api/timer-api.service';
 
@@ -13,6 +13,8 @@ export class TimerStateService {
 
   private readonly _timer = signal<RunningTimer | null>(null);
   private readonly _tick = signal(0);
+  /** Bumped on every start/stop/discard/patch; poll results from before a mutation are stale. */
+  private mutations = 0;
 
   readonly timer = this._timer.asReadonly();
   readonly isRunning = computed(() => this._timer() !== null);
@@ -35,30 +37,42 @@ export class TimerStateService {
   }
 
   refresh(): void {
-    this.api
-      .getCurrent()
-      .pipe(catchError(() => of(null)))
-      .subscribe((t) => this._timer.set(t ?? null));
+    const issuedAt = this.mutations;
+    this.api.getCurrent().subscribe({
+      next: (t) => {
+        if (issuedAt === this.mutations) {
+          this._timer.set(t ?? null);
+        }
+      },
+      // Keep the last known state: a transient error must not hide a running timer.
+      error: () => undefined,
+    });
   }
 
   start(input: TimerStartInput) {
-    return this.api.start(input).pipe(tap((t) => this._timer.set(t)));
+    this.mutations++;
+    return this.api.start(input).pipe(tap((t) => this.applyMutation(t)));
   }
 
+  /** {@code description} (also '' to clear) is saved with the stopped entry. */
   stop(description?: string) {
-    return this.api.stop(description).pipe(
-      tap((entry: TimeEntry) => {
-        this._timer.set(null);
-        return entry;
-      }),
-    );
+    this.mutations++;
+    return this.api.stop(description).pipe(tap((_entry: TimeEntry) => this.applyMutation(null)));
   }
 
   discard() {
-    return this.api.discard().pipe(tap(() => this._timer.set(null)));
+    this.mutations++;
+    return this.api.discard().pipe(tap(() => this.applyMutation(null)));
   }
 
   patch(patch: TimerPatch) {
-    return this.api.patch(patch).pipe(tap((t) => this._timer.set(t)));
+    this.mutations++;
+    return this.api.patch(patch).pipe(tap((t) => this.applyMutation(t)));
+  }
+
+  private applyMutation(t: RunningTimer | null): void {
+    // Responses arriving after the request also invalidate polls started meanwhile.
+    this.mutations++;
+    this._timer.set(t);
   }
 }

@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProjectApiService } from '../../core/api/project-api.service';
 import { TagApiService } from '../../core/api/tag-api.service';
@@ -13,7 +14,7 @@ import { TimerStateService } from '../../core/timer-state.service';
 import { AutofocusDirective } from '../../shared/directives/autofocus.directive';
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
-import { addDays, timeOf, toInstant, today, toIsoDate } from '../../shared/utils/date-utils';
+import { addDays, intervalFromFields, timeOf, today, toIsoDate } from '../../shared/utils/date-utils';
 import { LucideChevronDown, LucideChevronLeft, LucideChevronRight, LucideCopy, LucidePencil, LucidePlay, LucidePlus, LucideLock, LucideSplit, LucideX } from '@lucide/angular';
 import { MonthLockStateService } from '../../core/month-lock-state.service';
 import { MonthLockedBannerComponent } from '../../shared/components/month-locked-banner.component';
@@ -270,7 +271,7 @@ interface EntryGroup {
               </div>
               <div class="field">
                 <label>Task</label>
-                <select class="select" [(ngModel)]="form.taskId">
+                <select class="select" [(ngModel)]="form.taskId" (ngModelChange)="onTaskChange()">
                   <option [ngValue]="null">—</option>
                   @for (t of tasks(); track t.id) { <option [ngValue]="t.id">{{ t.name }}</option> }
                 </select>
@@ -329,6 +330,7 @@ export class TimerComponent {
   private readonly toast = inject(ToastService);
   private readonly shortcuts = inject(KeyboardShortcutService);
   private readonly dialog = inject(DialogService);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly todayIso = today();
   protected readonly viewDate = signal(today());
@@ -398,9 +400,29 @@ export class TimerComponent {
   protected form: TimeEntryInput = this.empty();
   protected readonly splitEntry = signal<TimeEntry | null>(null);
   protected splitTime = '';
+  /** Entry being edited, to keep its exact instants when the times are not changed. */
+  private editingEntry: TimeEntry | null = null;
+  /** Only the latest day request may set the list (fast day stepping). */
+  private loadSeq = 0;
 
   constructor() {
-    this.load();
+    // ?date=YYYY-MM-DD (e.g. from global search) selects the day; also the initial load.
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      const date = params.get('date');
+      if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= this.todayIso) {
+        this.viewDate.set(date);
+      }
+      this.load();
+    });
+    // A timer stopped elsewhere (top bar, "s") creates an entry: refresh the list.
+    let wasRunning = this.timerState.isRunning();
+    effect(() => {
+      const running = this.timerState.isRunning();
+      if (wasRunning && !running) {
+        untracked(() => { this.load(); this.loadRecent(); });
+      }
+      wasRunning = running;
+    });
     this.loadRecent();
     this.projectApi.getAll({ status: 'ACTIVE' }).subscribe((p) => this.projects.set(p));
     this.tagApi.getAll().subscribe((t) => this.allTags.set(t));
@@ -420,9 +442,14 @@ export class TimerComponent {
   load(): void {
     this.loading.set(true);
     const d = this.viewDate();
+    const seq = ++this.loadSeq;
     this.api.list({ from: d, to: d, size: 200 }).subscribe({
-      next: (page) => { this.entries.set(page.content); this.loading.set(false); },
-      error: () => this.loading.set(false),
+      next: (page) => {
+        if (seq !== this.loadSeq) return;
+        this.entries.set(page.content);
+        this.loading.set(false);
+      },
+      error: () => { if (seq === this.loadSeq) this.loading.set(false); },
     });
     this.clearSelection();
   }
@@ -525,6 +552,7 @@ export class TimerComponent {
   openNew(): void {
     this.form = this.empty();
     this.editingId = null;
+    this.editingEntry = null;
     this.date = this.viewDate();
     this.startTime = '09:00';
     this.endTime = '10:00';
@@ -543,7 +571,9 @@ export class TimerComponent {
       tagIds: e.tags.map((t) => t.id),
     };
     this.editingId = e.id;
-    this.date = e.entryDate;
+    this.editingEntry = e;
+    // The dialog date is the start day (entryDate is the end day for entries over midnight).
+    this.date = toIsoDate(new Date(e.startTime));
     this.startTime = timeOf(e.startTime);
     this.endTime = timeOf(e.endTime);
     this.onProjectChange(e.taskId);
@@ -552,10 +582,22 @@ export class TimerComponent {
 
   onProjectChange(keepTask: string | null = null): void {
     if (!keepTask) this.form.taskId = null;
+    if (!this.editingId) {
+      const project = this.projects().find((p) => p.id === this.form.projectId);
+      if (project) this.form.billable = project.billableByDefault;
+    }
     this.tasks.set([]);
     if (this.form.projectId) {
       this.taskApi.getForProject(this.form.projectId).subscribe((t) => this.tasks.set(t));
     }
+  }
+
+  onTaskChange(): void {
+    if (this.editingId) return;
+    const task = this.tasks().find((t) => t.id === this.form.taskId);
+    const project = this.projects().find((p) => p.id === this.form.projectId);
+    const def = task?.billableByDefault ?? project?.billableByDefault;
+    if (def !== undefined) this.form.billable = def;
   }
 
   toggleTag(id: string): void {
@@ -569,11 +611,12 @@ export class TimerComponent {
 
   save(): void {
     if (!this.form.projectId) return;
-    const payload: TimeEntryInput = {
-      ...this.form,
-      startTime: toInstant(this.date, this.startTime),
-      endTime: toInstant(this.date, this.endTime),
-    };
+    const interval = intervalFromFields(this.date, this.startTime, this.endTime, this.editingEntry ?? undefined);
+    if (!interval) {
+      this.toast.error('Datum, Start und Ende angeben');
+      return;
+    }
+    const payload: TimeEntryInput = { ...this.form, ...interval };
     const req = this.editingId ? this.api.update(this.editingId, payload) : this.api.create(payload);
     req.subscribe(() => {
       this.toast.success('Gespeichert');
@@ -653,10 +696,8 @@ export class TimerComponent {
   executeSplit(): void {
     const e = this.splitEntry();
     if (!e || !this.splitTime) return;
-    const [h, m] = this.splitTime.split(':').map(Number);
-    const splitDate = new Date(e.entryDate + 'T00:00:00');
-    splitDate.setHours(h, m, 0, 0);
-    const splitAt = splitDate.toISOString();
+    // Split time on the start day, or the next day if it is before the start (over midnight).
+    const splitAt = intervalFromFields(toIsoDate(new Date(e.startTime)), timeOf(e.startTime), this.splitTime)!.endTime;
     this.api.split(e.id, splitAt).subscribe(() => {
       this.toast.success('Aufgeteilt');
       this.closeSplit();

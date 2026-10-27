@@ -151,11 +151,52 @@ class ReportAggregationIntegrationTest extends AbstractIntegrationTest {
                 Instant.parse("2026-02-15T08:00:00Z"), Instant.parse("2026-02-15T10:00:00Z"), true, Set.of()));
 
         ReportFilter filter = new ReportFilter(FROM, TO, null, project.id(), null, null, null, null, null);
-        String csv = csvExportService.export(filter);
+        String csv = csvExportService.export(filter, DurationRounding.NONE);
 
         assertThat(csv).startsWith("Date,Day,Client,Project,Task,Description");
         assertThat(csv).contains("exported work");
         assertThat(csv).contains("2:00");      // duration h:mm
         assertThat(csv).contains("140.00");    // 2h * 70.00
+    }
+
+    @Test
+    void summaryFlagsMixedCurrenciesAndLabelsSingleCurrency() {
+        ClientResponse client = clientService.create(new ClientRequest("Currency Client " + System.nanoTime(), null, null, null, "EUR"));
+        ProjectResponse eur = projectService.create(new ProjectRequest(
+                client.id(), "EUR Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("100.00"), "EUR", null, null, BudgetReset.NONE));
+        ProjectResponse chf = projectService.create(new ProjectRequest(
+                client.id(), "CHF Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("100.00"), "CHF", null, null, BudgetReset.NONE));
+        timeEntryService.create(new TimeEntryRequest(eur.id(), null, "eur",
+                Instant.parse("2026-02-20T08:00:00Z"), Instant.parse("2026-02-20T09:00:00Z"), true, Set.of()));
+        timeEntryService.create(new TimeEntryRequest(chf.id(), null, "chf",
+                Instant.parse("2026-02-20T10:00:00Z"), Instant.parse("2026-02-20T11:00:00Z"), true, Set.of()));
+
+        SummaryReportResponse onlyChf = reportService.getSummary(
+                new ReportFilter(FROM, TO, null, chf.id(), null, null, null, null, GroupBy.PROJECT));
+        assertThat(onlyChf.currencyCode()).isEqualTo("CHF");
+        assertThat(onlyChf.mixedCurrencies()).isFalse();
+
+        SummaryReportResponse both = reportService.getSummary(
+                new ReportFilter(FROM, TO, client.id(), null, null, null, null, null, GroupBy.PROJECT));
+        assertThat(both.mixedCurrencies()).isTrue();
+        assertThat(both.revenueAmount()).isEqualByComparingTo("200.00");
+    }
+
+    @Test
+    void roundedDetailedReportAndCsvRoundEachEntryDuration() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Rounded Csv Project " + System.nanoTime(), null, null, true,
+                new BigDecimal("60.00"), "EUR", null, null, BudgetReset.NONE));
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "one minute",
+                Instant.parse("2026-02-16T08:00:00Z"), Instant.parse("2026-02-16T08:01:00Z"), true, Set.of()));
+        ReportFilter filter = new ReportFilter(FROM, TO, null, project.id(), null, null, null, null, null);
+        DurationRounding upTo15 = new DurationRounding(com.ch3xy.dash.settings.RoundingRule.UP, 15);
+
+        assertThat(csvExportService.export(filter, upTo15)).contains("0:15").contains("0.25");
+        assertThat(csvExportService.export(filter, DurationRounding.NONE)).contains("0:01");
+        assertThat(reportService.getDetailed(filter, org.springframework.data.domain.Pageable.unpaged(), false)
+                .getContent()).singleElement().satisfies(e -> assertThat(e.durationSeconds()).isEqualTo(60));
     }
 }

@@ -72,6 +72,42 @@ public class BackupRestoreService {
         requirePresent(doc.tags(), "tags");
         requirePresent(doc.timeEntries(), "timeEntries");
         settingsService.validate(toRequest(doc.settings()));
+        // Required (NOT NULL) fields per record, so a hand-edited backup fails with the
+        // field name instead of an NPE or constraint error halfway through the restore.
+        for (int i = 0; i < doc.projects().size(); i++) {
+            var p = doc.projects().get(i);
+            requireField(p.id(), "projects", i, "id");
+            requireField(p.name(), "projects", i, "name");
+            requireField(p.status(), "projects", i, "status");
+            requireField(p.budgetReset(), "projects", i, "budgetReset");
+            requireField(p.currencyCode(), "projects", i, "currencyCode");
+        }
+        for (int i = 0; i < doc.projectRates().size(); i++) {
+            var r = doc.projectRates().get(i);
+            requireField(r.projectId(), "projectRates", i, "projectId");
+            requireField(r.hourlyRate(), "projectRates", i, "hourlyRate");
+            requireField(r.currencyCode(), "projectRates", i, "currencyCode");
+            requireField(r.validFrom(), "projectRates", i, "validFrom");
+        }
+        for (int i = 0; i < doc.tasks().size(); i++) {
+            var t = doc.tasks().get(i);
+            requireField(t.projectId(), "tasks", i, "projectId");
+            requireField(t.name(), "tasks", i, "name");
+        }
+        for (int i = 0; i < doc.timeEntries().size(); i++) {
+            var e = doc.timeEntries().get(i);
+            requireField(e.projectId(), "timeEntries", i, "projectId");
+            requireField(e.startTime(), "timeEntries", i, "startTime");
+            requireField(e.endTime(), "timeEntries", i, "endTime");
+            requireField(e.entryDate(), "timeEntries", i, "entryDate");
+            requireField(e.source(), "timeEntries", i, "source");
+        }
+    }
+
+    private static void requireField(Object value, String collection, int index, String field) {
+        if (value == null) {
+            throw new IllegalArgumentException(collection + "[" + index + "]." + field + " is missing");
+        }
     }
 
     private static void requirePresent(Object value, String field) {

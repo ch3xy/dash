@@ -8,6 +8,7 @@ import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { LucideX } from '@lucide/angular';
 
 /** Create/edit dialog for project master data. `project` null means "new project". */
+import { currencyError, nonNegativeError, positiveError } from '../../shared/utils/form-checks';
 @Component({
   selector: 'app-project-form-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -38,9 +39,13 @@ import { LucideX } from '@lucide/angular';
           <div class="form-row">
             <div class="field">
               <label>Standard-Satz (Fallback)</label>
-              <input class="input mono" type="number" [(ngModel)]="form.defaultHourlyRate" />
+              <input class="input mono" type="number" min="0" [(ngModel)]="form.defaultHourlyRate" />
+              @if (errors().rate; as e) { <span class="field-error">{{ e }}</span> }
             </div>
-            <div class="field" style="max-width: 100px;"><label>Währung</label><input class="input mono" [(ngModel)]="form.currencyCode" maxlength="3" /></div>
+            <div class="field" style="max-width: 100px;">
+              <label>Währung</label><input class="input mono" [(ngModel)]="form.currencyCode" maxlength="3" />
+              @if (errors().currency; as e) { <span class="field-error">{{ e }}</span> }
+            </div>
           </div>
           @if (activeRate(); as r) {
             <div class="faint" style="margin-top: calc(-1 * var(--sp-2)); margin-bottom: var(--sp-3);">
@@ -48,8 +53,14 @@ import { LucideX } from '@lucide/angular';
             </div>
           }
           <div class="form-row">
-            <div class="field"><label>Stundenbudget (h)</label><input class="input mono" type="number" [(ngModel)]="budgetHours" /></div>
-            <div class="field"><label>Geldbudget</label><input class="input mono" type="number" [(ngModel)]="form.moneyBudgetAmount" /></div>
+            <div class="field">
+              <label>Stundenbudget (h)</label><input class="input mono" type="number" min="0" [(ngModel)]="budgetHours" />
+              @if (errors().budgetHours; as e) { <span class="field-error">{{ e }}</span> }
+            </div>
+            <div class="field">
+              <label>Geldbudget</label><input class="input mono" type="number" min="0" [(ngModel)]="form.moneyBudgetAmount" />
+              @if (errors().moneyBudget; as e) { <span class="field-error">{{ e }}</span> }
+            </div>
             <div class="field">
               <label>Budget-Reset</label>
               <select class="select" [(ngModel)]="form.budgetReset">
@@ -61,7 +72,7 @@ import { LucideX } from '@lucide/angular';
         </div>
         <div class="dialog-footer">
           <button class="btn" (click)="closed.emit()">Abbrechen</button>
-          <button class="btn btn-primary" (click)="save()" [disabled]="!form.name?.trim()">Speichern</button>
+          <button class="btn btn-primary" (click)="save()" [disabled]="!form.name?.trim() || hasErrors()">Speichern</button>
         </div>
       </div>
     </div>
@@ -109,12 +120,27 @@ export class ProjectFormDialogComponent implements OnInit {
     }
   }
 
+  protected errors() {
+    return {
+      rate: nonNegativeError(this.form.defaultHourlyRate),
+      currency: currencyError(this.form.currencyCode),
+      // Budget 0 is "no budget" for the backend; leave the field empty instead.
+      budgetHours: positiveError(this.budgetHours),
+      moneyBudget: nonNegativeError(this.form.moneyBudgetAmount),
+    };
+  }
+
+  protected hasErrors(): boolean {
+    return Object.values(this.errors()).some((e) => e !== null);
+  }
+
   save(): void {
-    if (!this.form.name?.trim()) {
+    if (!this.form.name?.trim() || this.hasErrors()) {
       return;
     }
     const payload: ProjectInput = {
       ...this.form,
+      currencyCode: (this.form.currencyCode ?? '').trim().toUpperCase(),
       hourBudgetMinutes: this.budgetHours != null ? Math.round(this.budgetHours * 60) : null,
     };
     const p = this.project();

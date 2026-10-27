@@ -59,8 +59,8 @@ public class TimesheetService {
     }
 
     /**
-     * Sets the tracked time of a cell. Increasing appends one entry after the
-     * day's last entry; decreasing trims the cell's latest entries from the end
+     * Sets the tracked time of a cell. Increasing adds one entry on that day (see
+     * {@link #placeTopUp}); decreasing trims the cell's latest entries from the end
      * and deletes those that would shrink to zero.
      */
     @Transactional
@@ -85,16 +85,42 @@ public class TimesheetService {
         long target = req.durationSeconds();
 
         if (target > current) {
-            Instant start = dayEntries.stream()
-                    .map(TimeEntry::getEndTime)
-                    .max(Comparator.naturalOrder())
-                    .orElseGet(() -> req.date().atTime(DEFAULT_DAY_START).atZone(zone()).toInstant());
+            Instant start = placeTopUp(dayEntries, req.date(), target - current);
             boolean billable = task != null ? task.isBillableByDefault() : project.isBillableByDefault();
             entryService.create(new TimeEntryRequest(project.getId(), req.taskId(), null,
                     start, start.plusSeconds(target - current), billable, null));
         } else if (target < current) {
             trim(cell, current - target);
         }
+    }
+
+    /**
+     * Start of a new entry of the given length that must belong to {@code date}: after the
+     * day's last entry, else before its first entry, else rejected. An entry belongs to the
+     * day of its end time, so it has to end before the next midnight.
+     */
+    private Instant placeTopUp(List<TimeEntry> dayEntries, LocalDate date, long seconds) {
+        Instant dayStart = date.atStartOfDay(zone()).toInstant();
+        Instant dayEnd = date.plusDays(1).atStartOfDay(zone()).toInstant();
+        if (dayEntries.isEmpty()) {
+            Instant start = date.atTime(DEFAULT_DAY_START).atZone(zone()).toInstant();
+            if (start.plusSeconds(seconds).isBefore(dayEnd)) {
+                return start;
+            }
+            if (dayStart.plusSeconds(seconds).isBefore(dayEnd)) {
+                return dayStart;
+            }
+        } else {
+            Instant lastEnd = dayEntries.stream().map(TimeEntry::getEndTime).max(Comparator.naturalOrder()).get();
+            if (lastEnd.plusSeconds(seconds).isBefore(dayEnd)) {
+                return lastEnd;
+            }
+            Instant firstStart = dayEntries.stream().map(TimeEntry::getStartTime).min(Comparator.naturalOrder()).get();
+            if (!firstStart.minusSeconds(seconds).isBefore(dayStart)) {
+                return firstStart.minusSeconds(seconds);
+            }
+        }
+        throw new IllegalArgumentException("durationSeconds: the additional time does not fit into " + date);
     }
 
     private void trim(List<TimeEntry> cell, long seconds) {
@@ -110,9 +136,14 @@ public class TimesheetService {
                 remaining -= e.getDurationSeconds();
                 entryService.delete(e.getId());
             } else {
+                // Trim from the end, unless that would move the end (and so the entry
+                // date) before midnight of an entry that started the day before.
+                Instant newEnd = e.getEndTime().minusSeconds(remaining);
+                boolean sameDay = newEnd.atZone(zone()).toLocalDate().equals(e.getEntryDate());
                 entryService.update(e.getId(), new TimeEntryRequest(
                         e.getProject().getId(), taskId(e), e.getDescription(),
-                        e.getStartTime(), e.getEndTime().minusSeconds(remaining), e.isBillable(), tagIds(e)));
+                        sameDay ? e.getStartTime() : e.getStartTime().plusSeconds(remaining),
+                        sameDay ? newEnd : e.getEndTime(), e.isBillable(), tagIds(e)));
                 remaining = 0;
             }
         }

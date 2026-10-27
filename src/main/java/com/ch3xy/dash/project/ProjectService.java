@@ -78,11 +78,6 @@ public class ProjectService {
 
     public BudgetStatusResponse getBudgetStatus(UUID id) {
         Project project = require(id);
-        if (project.getHourBudgetMinutes() == null) {
-            return new BudgetStatusResponse(id, null, 0, 0, 0.0,
-                    project.getMoneyBudgetAmount(), BigDecimal.ZERO, "ALL_TIME", "NO_BUDGET");
-        }
-
         String period;
         LocalDate from;
         LocalDate today = LocalDate.now(settingsService.getTimezone());
@@ -97,14 +92,18 @@ public class ProjectService {
         BigDecimal revenue = queryRevenue(id, from);
 
         int usedMinutes = (int) (usedSeconds / 60);
-        int remaining = project.getHourBudgetMinutes() - usedMinutes;
-        double usedPercent = project.getHourBudgetMinutes() > 0
-                ? (double) usedMinutes / project.getHourBudgetMinutes() * 100.0
-                : 0.0;
+        // Usage and revenue are reported even without an hour budget (e.g. for a money budget).
+        Integer budgetMinutes = project.getHourBudgetMinutes();
+        if (budgetMinutes == null || budgetMinutes <= 0) {
+            return new BudgetStatusResponse(id, budgetMinutes, usedMinutes, 0, 0.0,
+                    project.getMoneyBudgetAmount(), revenue, period, "NO_BUDGET");
+        }
+        int remaining = budgetMinutes - usedMinutes;
+        double usedPercent = (double) usedMinutes / budgetMinutes * 100.0;
 
         String status = usedPercent > 100 ? "EXCEEDED" : usedPercent >= 80 ? "WARNING" : "ON_TRACK";
 
-        return new BudgetStatusResponse(id, project.getHourBudgetMinutes(), usedMinutes,
+        return new BudgetStatusResponse(id, budgetMinutes, usedMinutes,
                 remaining, usedPercent, project.getMoneyBudgetAmount(), revenue, period, status);
     }
 
@@ -117,6 +116,14 @@ public class ProjectService {
     @Transactional
     public ProjectRateResponse addRate(UUID id, ProjectRateRequest req) {
         Project project = require(id);
+        // Rates form a gapless, non-overlapping history: a new rate must start after the
+        // latest one, which it then closes. Inserting into the past would invert ranges.
+        rateRepository.findAllByProjectIdOrderByValidFromDesc(id).stream().findFirst()
+                .filter(latest -> !req.validFrom().isAfter(latest.getValidFrom()))
+                .ifPresent(latest -> {
+                    throw new IllegalArgumentException("validFrom: must be after the start of the latest rate ("
+                            + latest.getValidFrom() + ")");
+                });
         rateRepository.closeOpenRates(id, req.validFrom());
         ProjectRate rate = new ProjectRate();
         rate.setProject(project);
