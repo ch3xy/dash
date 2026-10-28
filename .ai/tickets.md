@@ -4,6 +4,34 @@ Format: `[PHASE-NR] Titel — Dateien/Klassen die erstellt/geändert werden`
 
 ---
 
+## Bugs
+
+### TB-1: Prognose addiert sich auf bereits vorhandene Zukunfts-Einträge
+**Status:** Offen  
+**Priorität:** Medium  
+**Gefunden:** 2026-10-28
+
+**Problem:**  
+Wenn der Benutzer Zeiteinträge manuell in die Zukunft vorausfüllt, werden die Prognose-Stunden additiv auf die bereits existierenden Einträge aufaddiert statt sie zu berücksichtigen.
+
+Beispiel: 4h manuell für morgen gebucht + Prognose ergibt 8h → Anzeige zeigt 12h statt 4h oder 8h.
+
+**Ursache:**  
+`ForecastService.getForecast()` (`ForecastService.java:76`) berechnet Prognose-Daten für alle Zukunftstage auf Basis des Vorjahres (52 Wochen zurück), ohne vorhandene Zeiteinträge in diesen Tagen abzuziehen. Das Frontend (`reports.component.ts:819`) addiert `forecastSeconds` additiv auf die tatsächlichen `totalSeconds` des Tages.
+
+**Gewünschtes Verhalten (zwei Optionen, zu entscheiden vor Umsetzung):**  
+- **Option A — Kein Forecast bei vorhandenen Daten:** Tage mit bereits existierenden Zeiteinträgen bekommen keine Prognose.  
+- **Option B — Fill-up (empfohlen):** Prognose füllt nur bis zur prognostizierten Menge auf. Formel pro Tag: `forecastSeconds = max(0, predictedSeconds - actualSeconds)`. Beispiel: 4h gebucht, 8h Prognose → 4h Prognose-Aufschlag → Anzeige 8h gesamt.
+
+**Betroffene Dateien:**  
+- `src/main/java/com/ch3xy/dash/report/ForecastService.java` — Kernlogik: muss für Zukunftstage tatsächliche Einträge abfragen und von der Prognose abziehen  
+- `src/test/java/com/ch3xy/dash/report/ForecastServiceIntegrationTest.java` — neuer Testfall: Tag mit vorhandenem Eintrag erhält nur Fill-up-Prognose  
+- `frontend/src/app/features/reports/reports.component.ts` — ggf. kein Änderungsbedarf, wenn Backend bereits korrekten Wert liefert  
+
+**Kein Testfall vorhanden**, der Zukunfts-Einträge kombiniert mit Prognose abdeckt.
+
+---
+
 ## Phase 0 — Setup
 
 ### T0-1: Docker Compose + Flyway Bootstrap
