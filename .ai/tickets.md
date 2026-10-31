@@ -7,7 +7,7 @@ Format: `[PHASE-NR] Titel — Dateien/Klassen die erstellt/geändert werden`
 ## Bugs
 
 ### TB-1: Prognose addiert sich auf bereits vorhandene Zukunfts-Einträge
-**Status:** Offen  
+**Status:** Erledigt (Option B, Fill-up; 2026-10-31)  
 **Priorität:** Medium  
 **Gefunden:** 2026-10-28
 

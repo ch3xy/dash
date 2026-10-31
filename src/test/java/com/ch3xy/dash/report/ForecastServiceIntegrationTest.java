@@ -79,6 +79,45 @@ class ForecastServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void forecastOnlyFillsUpTimeAlreadyTrackedOnFutureDay() {
+        ClientResponse client = clientService.create(new ClientRequest("Forecast C " + System.nanoTime(), null, null, null, null));
+        ProjectResponse p1 = project(client.id(), "C1", "100.00");
+        ProjectResponse p2 = project(client.id(), "C2", "100.00");
+        // Source Monday 2040-10-22: 6h C1 + 2h C2 → 8h predicted for Monday 2041-10-21.
+        entry(p1.id(), "2040-10-22T06:00:00Z", "2040-10-22T12:00:00Z", true);
+        entry(p2.id(), "2040-10-22T12:00:00Z", "2040-10-22T14:00:00Z", true);
+        // 4h already booked on the forecast day → only 4h left to fill, split 3:1.
+        entry(p2.id(), "2041-10-21T06:00:00Z", "2041-10-21T10:00:00Z", true);
+
+        ForecastResponse fc = forecastService.getForecast(monthFilter(client.id(), GroupBy.PROJECT), false, TODAY);
+
+        assertThat(fc.totalDurationSeconds()).isEqualTo(4 * 3600);
+        assertThat(fc.billableDurationSeconds()).isEqualTo(4 * 3600);
+        assertThat(fc.revenueAmount()).isEqualByComparingTo("400.00");
+        assertThat(fc.days().getFirst().totalSeconds()).isEqualTo(4 * 3600);
+        assertThat(fc.days().getFirst().projects())
+                .extracting(s -> s.durationSeconds())
+                .containsExactly(3L * 3600, 1L * 3600);
+        assertThat(fc.groups()).extracting(g -> g.durationSeconds())
+                .containsExactly(3L * 3600, 1L * 3600);
+    }
+
+    @Test
+    void dayAlreadyTrackedBeyondPredictionGetsNoForecast() {
+        ClientResponse client = clientService.create(new ClientRequest("Forecast D " + System.nanoTime(), null, null, null, null));
+        ProjectResponse p = project(client.id(), "D1", "100.00");
+        entry(p.id(), "2040-10-22T07:00:00Z", "2040-10-22T09:00:00Z", true);
+        entry(p.id(), "2041-10-21T07:00:00Z", "2041-10-21T10:00:00Z", true);
+
+        ForecastResponse fc = forecastService.getForecast(monthFilter(client.id(), GroupBy.PROJECT), false, TODAY);
+
+        assertThat(fc.totalDurationSeconds()).isZero();
+        assertThat(fc.revenueAmount()).isEqualByComparingTo("0");
+        assertThat(fc.groups()).isEmpty();
+        assertThat(fc.days().getFirst().projects()).isEmpty();
+    }
+
+    @Test
     void rangeWithoutFuturePartIsEmpty() {
         ReportFilter past = new ReportFilter(LocalDate.of(2041, 10, 1), TODAY,
                 null, null, null, null, null, null, GroupBy.PROJECT);

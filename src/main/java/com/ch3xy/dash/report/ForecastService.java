@@ -40,6 +40,10 @@ import java.util.stream.Collectors;
  * </ul>
  * Revenue uses the target project's current rate, so last year's hours are priced
  * as if worked today. Tasks are not mapped, the task filter therefore yields no forecast.
+ * <p>
+ * Time already tracked on a future day (same filter) counts towards the prediction:
+ * the forecast only fills the day up to the predicted total, every row of that day
+ * shrinks by the same factor, and a day tracked beyond its prediction gets none.
  */
 @Service
 @Transactional(readOnly = true)
@@ -95,13 +99,16 @@ public class ForecastService {
 
         Map<UUID, UUID> currentByClient = queryRepository.currentProjectByClient(
                 today.minusDays(CURRENT_PROJECT_WINDOW_DAYS));
-        List<Mapped> rows = map(queryRepository.forecastSourceRows(source, rule, minutes, false),
+        List<Mapped> predicted = map(queryRepository.forecastSourceRows(source, rule, minutes, false),
                 currentByClient, filter.projectId(), from, to);
+        Map<LocalDate, long[]> fill = fillUp(predicted, new ReportFilter(from, to, filter.clientId(),
+                filter.projectId(), null, filter.tagId(), filter.billable(), filter.q(), groupBy), rule, minutes);
+        List<Mapped> rows = scale(predicted, fill);
         // Grouping by tag counts an entry once per tag, so tag groups come from a
         // separate query and never feed the totals or the daily bars.
         List<Mapped> groupRows = groupBy == GroupBy.TAG
-                ? map(queryRepository.forecastSourceRows(source, rule, minutes, true),
-                        currentByClient, filter.projectId(), from, to)
+                ? scale(map(queryRepository.forecastSourceRows(source, rule, minutes, true),
+                        currentByClient, filter.projectId(), from, to), fill)
                 : rows;
 
         Map<UUID, Project> projects = projectRepository.findAllById(
@@ -140,6 +147,36 @@ public class ForecastService {
             LocalDate day = r.day().plusWeeks(SOURCE_OFFSET_WEEKS);
             out.add(new Mapped(day, target, r.clientId(), r.clientLabel(), r.billable(),
                     r.tagKey(), r.tagLabel(), r.seconds()));
+        }
+        return out;
+    }
+
+    /**
+     * Per forecast day {predicted, remaining} seconds, where remaining is what is left
+     * after subtracting the time already tracked on that day.
+     */
+    private Map<LocalDate, long[]> fillUp(List<Mapped> predicted, ReportFilter actualFilter,
+                                          RoundingRule rule, int minutes) {
+        Map<LocalDate, long[]> fill = new HashMap<>();
+        predicted.forEach(r -> fill.computeIfAbsent(r.day(), d -> new long[2])[0] += r.seconds());
+        Map<LocalDate, Long> actual = new HashMap<>();
+        queryRepository.dailyProjectRows(actualFilter, rule, minutes)
+                .forEach(s -> actual.merge(LocalDate.parse(s.date()), s.durationSeconds(), Long::sum));
+        fill.forEach((day, f) -> f[1] = Math.max(0, f[0] - actual.getOrDefault(day, 0L)));
+        return fill;
+    }
+
+    /** Shrinks each row by its day's remaining/predicted factor; rows that drop to zero vanish. */
+    private List<Mapped> scale(List<Mapped> rows, Map<LocalDate, long[]> fill) {
+        List<Mapped> out = new ArrayList<>();
+        for (Mapped r : rows) {
+            long[] f = fill.get(r.day());
+            long seconds = f == null || f[0] == f[1] ? r.seconds()
+                    : f[0] == 0 ? 0 : Math.round((double) r.seconds() * f[1] / f[0]);
+            if (seconds > 0) {
+                out.add(new Mapped(r.day(), r.projectId(), r.clientId(), r.clientLabel(), r.billable(),
+                        r.tagKey(), r.tagLabel(), seconds));
+            }
         }
         return out;
     }

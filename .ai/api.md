@@ -563,6 +563,7 @@ Gleiche Filter wie `/summary` plus `rounded`. Prognose für die Tage **nach heut
 - Ohne zukünftigen Anteil: `from`/`to` = null, leere Listen.
 - Aktives Quellprojekt behält seine Zeit; archiviertes → aktuelles Projekt des Kunden (aktives Projekt mit den meisten Stunden der letzten 90 Tage, sonst das neueste). Ohne Ziel fällt die Zeit weg.
 - Umsatz = Vorjahresdauer × **aktueller** Satz des Zielprojekts (ohne Task-Override), nur für abrechenbare Einträge.
+- **Auffüllen statt addieren:** Bereits erfasste Zeit an einem Zukunftstag (gleiche Filter) zählt zur Prognose. Pro Tag bleibt `max(0, Prognose − Ist)`, alle Prognosezeilen des Tags schrumpfen anteilig (Projekte, Gruppen, Umsatz). Beispiel: 4h gebucht, 8h Prognose → 4h Prognose.
 - `groups` verwenden dieselben Keys/Labels wie `/summary` (Frontend merged). Task-Filter → keine Prognose.
 - `days[].projects` haben dasselbe Segmentformat wie `/daily-breakdown` (inkl. `billableSeconds`, `revenueAmount` zum aktuellen Satz). `revenueAmount` ist hier **ungerundet**, damit Wochen-/Monatssummen im Client exakt den Gruppen-Summen entsprechen; gerundet wird erst bei der Anzeige.
 
