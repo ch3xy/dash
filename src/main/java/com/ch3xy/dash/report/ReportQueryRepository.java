@@ -136,8 +136,10 @@ public class ReportQueryRepository {
                 FROM projects p
                 LEFT JOIN clients c ON c.id = p.client_id
                 LEFT JOIN time_entries te ON te.project_id = p.id
-                    AND (p.budget_reset <> 'MONTHLY' OR te.entry_date >= CAST(:monthStart AS date))
-                    AND (p.budget_reset <> 'YEARLY'  OR te.entry_date >= CAST(:yearStart AS date))
+                    AND (p.budget_reset <> 'MONTHLY' OR (te.entry_date >= CAST(:monthStart AS date)
+                         AND te.entry_date < CAST(:monthStart AS date) + INTERVAL '1 month'))
+                    AND (p.budget_reset <> 'YEARLY'  OR (te.entry_date >= CAST(:yearStart AS date)
+                         AND te.entry_date < CAST(:yearStart AS date) + INTERVAL '1 year'))
                 WHERE p.hour_budget_minutes > 0
                   AND p.status <> 'ARCHIVED'
                 GROUP BY p.id, p.name, c.name, p.hour_budget_minutes
@@ -376,7 +378,7 @@ public class ReportQueryRepository {
                 AND (CAST(:clientId AS uuid) IS NULL OR p.client_id = CAST(:clientId AS uuid))
                 AND (CAST(:taskId AS uuid) IS NULL OR te.task_id = CAST(:taskId AS uuid))
                 AND (CAST(:billable AS boolean) IS NULL OR te.billable = CAST(:billable AS boolean))
-                AND (CAST(:q AS text) IS NULL OR LOWER(te.description) LIKE LOWER('%' || CAST(:q AS text) || '%'))
+                AND (CAST(:q AS text) IS NULL OR strpos(LOWER(te.description), LOWER(CAST(:q AS text))) > 0)
                 AND (CAST(:tagId AS uuid) IS NULL OR EXISTS (
                         SELECT 1 FROM time_entry_tags tt
                         WHERE tt.time_entry_id = te.id AND tt.tag_id = CAST(:tagId AS uuid)))

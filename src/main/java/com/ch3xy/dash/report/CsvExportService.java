@@ -38,10 +38,10 @@ public class CsvExportService {
                 printer.printRecord(
                         e.entryDate(),
                         e.entryDate().getDayOfWeek(),
-                        nullToEmpty(e.clientName()),
-                        e.projectName(),
-                        nullToEmpty(e.taskName()),
-                        nullToEmpty(e.description()),
+                        text(nullToEmpty(e.clientName())),
+                        text(e.projectName()),
+                        text(nullToEmpty(e.taskName())),
+                        text(nullToEmpty(e.description())),
                         timeFmt.format(e.startTime()),
                         timeFmt.format(e.endTime()),
                         ReportExportColumns.formatDuration(rounding.apply(e.durationSeconds())),
@@ -50,13 +50,21 @@ public class CsvExportService {
                         e.hourlyRateSnapshot() != null ? e.hourlyRateSnapshot().toPlainString() : "",
                         nullToEmpty(e.currencyCodeSnapshot()),
                         e.amountSnapshot() != null ? e.amountSnapshot().toPlainString() : "",
-                        e.tags().stream().map(t -> t.name()).collect(Collectors.joining(";"))
+                        text(e.tags().stream().map(t -> t.name()).collect(Collectors.joining(";")))
                 );
             }
         } catch (IOException ex) {
             throw new UncheckedIOException("Failed to render CSV", ex);
         }
         return writer.toString();
+    }
+
+    /**
+     * Free text with a leading quote if it starts like a formula, so spreadsheets
+     * show it instead of evaluating it (CSV injection).
+     */
+    static String text(String s) {
+        return !s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0 ? "'" + s : s;
     }
 
     private static String nullToEmpty(String s) {

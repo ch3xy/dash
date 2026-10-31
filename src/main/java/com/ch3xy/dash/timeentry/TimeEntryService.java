@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Types;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -35,6 +36,8 @@ import java.util.UUID;
 public class TimeEntryService {
 
     private static final BigDecimal SECONDS_PER_HOUR = BigDecimal.valueOf(3600);
+    /** Upper bound against typos in the year; also keeps durationSeconds within int. */
+    static final Duration MAX_DURATION = Duration.ofDays(31);
 
     private final TimeEntryRepository repository;
     private final ProjectRepository projectRepository;
@@ -64,10 +67,11 @@ public class TimeEntryService {
     }
 
     /**
-     * The most recently used project/task pairings, ordered by last use.
+     * The most recently used project/task pairings, ordered by last use. The limit is
+     * clamped to 1..100 (a negative LIMIT would be an SQL error).
      */
     public List<RecentCombination> recentCombinations(int limit) {
-        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", limit);
+        MapSqlParameterSource params = new MapSqlParameterSource().addValue("limit", Math.clamp(limit, 1, 100));
         return jdbc.query("""
                 SELECT te.project_id, p.name AS project_name, te.task_id, t.name AS task_name,
                        MAX(te.created_at) AS last_used
@@ -210,18 +214,33 @@ public class TimeEntryService {
      */
     @Transactional
     public int deleteByCriteria(DeleteCriteria criteria, int expectedCount) {
-        DeletePreview preview = previewDelete(criteria);
-        if (preview.lockedCount() > 0) {
-            throw new IllegalStateException(preview.lockedCount()
+        requireCriteria(criteria);
+        // Lock the matching rows and delete exactly those, so an entry committed after
+        // this check (e.g. by an import) is never deleted without being counted.
+        List<UUID> ids = jdbc.queryForList(
+                "SELECT te.id FROM time_entries te, projects p WHERE " + CRITERIA_WHERE + " FOR UPDATE OF te",
+                criteriaParams(criteria), UUID.class);
+        if (ids.size() != expectedCount) {
+            throw new IllegalStateException(
+                    "Expected " + expectedCount + " entries but " + ids.size() + " match; nothing was deleted");
+        }
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        MapSqlParameterSource idParams = new MapSqlParameterSource("ids", ids);
+        jdbc.queryForList("SELECT DISTINCT entry_date FROM time_entries WHERE id IN (:ids)", idParams, LocalDate.class)
+                .forEach(monthLocks::guard);
+        Integer locked = jdbc.queryForObject("""
+                SELECT count(*) FROM time_entries te
+                WHERE te.id IN (:ids) AND EXISTS (
+                    SELECT 1 FROM month_locks ml
+                    WHERE ml.month = CAST(date_trunc('month', te.entry_date) AS date))
+                """, idParams, Integer.class);
+        if (locked != null && locked > 0) {
+            throw new IllegalStateException(locked
                     + " der Einträge liegen in abgeschlossenen Monaten – es wurde nichts gelöscht");
         }
-        int actual = preview.count();
-        if (actual != expectedCount) {
-            throw new IllegalStateException(
-                    "Expected " + expectedCount + " entries but " + actual + " match; nothing was deleted");
-        }
-        return jdbc.update("DELETE FROM time_entries te USING projects p WHERE " + CRITERIA_WHERE,
-                criteriaParams(criteria));
+        return jdbc.update("DELETE FROM time_entries WHERE id IN (:ids)", idParams);
     }
 
     private static void requireCriteria(DeleteCriteria criteria) {
@@ -321,6 +340,10 @@ public class TimeEntryService {
         if (!req.endTime().isAfter(req.startTime())) {
             throw new IllegalArgumentException("endTime must be after startTime");
         }
+        if (Duration.between(req.startTime(), req.endTime()).compareTo(MAX_DURATION) > 0) {
+            throw new IllegalArgumentException("endTime: an entry must not be longer than "
+                    + MAX_DURATION.toDays() + " days");
+        }
 
         Project project = projectRepository.findById(req.projectId())
                 .orElseThrow(() -> new EntityNotFoundException("Project not found: " + req.projectId()));
@@ -357,9 +380,9 @@ public class TimeEntryService {
         if (!billable || hourlyRate == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        BigDecimal hours = BigDecimal.valueOf(durationSeconds)
-                .divide(SECONDS_PER_HOUR, 10, RoundingMode.HALF_UP);
-        return hours.multiply(hourlyRate).setScale(2, RoundingMode.HALF_UP);
+        // Multiply first and round once, so exact half cents round up (120 s at 10.65/h = 0.355 → 0.36).
+        return BigDecimal.valueOf(durationSeconds).multiply(hourlyRate)
+                .divide(SECONDS_PER_HOUR, 2, RoundingMode.HALF_UP);
     }
 
     private Set<Tag> resolveTags(Set<UUID> tagIds) {

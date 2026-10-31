@@ -11,7 +11,7 @@ import { DonutGaugeComponent } from '../../shared/components/donut-gauge.compone
 import { DurationPipe } from '../../shared/pipes/duration.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { DateRange, RANGE_PRESETS, formatRange, matchPreset, parseIsoDate, weekRange } from '../../shared/utils/date-range';
-import { addDays, timeOf, toIsoDate } from '../../shared/utils/date-utils';
+import { addDays, isValidIsoDate, timeOf, toIsoDate } from '../../shared/utils/date-utils';
 import { LucideArrowRight } from '@lucide/angular';
 
 @Component({
@@ -209,7 +209,7 @@ export class DashboardComponent {
   }
 
   private parseRange(from: string | null, to: string | null): DateRange {
-    return from && to && from <= to ? { from, to } : weekRange(toIsoDate(new Date()));
+    return isValidIsoDate(from) && isValidIsoDate(to) && from <= to ? { from, to } : weekRange(toIsoDate(new Date()));
   }
 
   /** Mon–Fri days in the selected period. */

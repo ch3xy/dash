@@ -79,3 +79,11 @@ export function isoWeek(d: Date): number {
   const jan4 = new Date(date.getFullYear(), 0, 4);
   return 1 + Math.round(((date.getTime() - jan4.getTime()) / 86_400_000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
 }
+
+/** True for a real calendar day in YYYY-MM-DD form (rejects 2026-02-30 and free text). */
+export function isValidIsoDate(value: string | null | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}

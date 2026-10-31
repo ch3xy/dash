@@ -344,7 +344,10 @@ export class CalendarComponent implements OnDestroy {
   protected get weekStart(): Date {
     return parseIsoDate(this.week().from);
   }
-  protected readonly todayIso = toIsoDate(new Date());
+  /** Evaluated on use so it does not go stale after midnight. */
+  protected get todayIso(): string {
+    return toIsoDate(new Date());
+  }
   private readonly nowMinutes = signal(this.currentMinutes());
   private readonly nowTimer = setInterval(() => this.nowMinutes.set(this.currentMinutes()), 60_000);
 
@@ -363,6 +366,8 @@ export class CalendarComponent implements OnDestroy {
   /** Pointer position at drag start; movement below DRAG_THRESHOLD_PX counts as a click. */
   private dragOrigin = { x: 0, y: 0 };
   private detachDragListeners: (() => void) | null = null;
+  /** Removes the document listeners of a pending grid tap; also run on destroy. */
+  private detachGridTouch: (() => void) | null = null;
 
   protected readonly projects = signal<Project[]>([]);
   protected readonly tasks = signal<Task[]>([]);
@@ -399,8 +404,7 @@ export class CalendarComponent implements OnDestroy {
         .filter((e) => e.entryDate === iso)
         .map((e) => {
           const startMin = this.entryStartMin(e);
-          const endMin = Math.min(DAY_MIN, startMin + Math.max(1, Math.round(e.durationSeconds / 60)));
-          return { entry: e, startMin, endMin };
+          return { entry: e, startMin, endMin: this.entryEndMin(e) };
         });
       cols.push({
         date: iso,
@@ -611,18 +615,24 @@ export class CalendarComponent implements OnDestroy {
     const hit = this.hitTest(startX, startY);
     const startMin = Math.min(DAY_MIN - SNAP_MIN, this.snapDown(hit?.minutes ?? 0));
     let moved = false;
+    this.detachGridTouch?.();
 
     const onMove = (mv: TouchEvent) => {
       const t = mv.changedTouches[0];
       if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) moved = true;
     };
-    const onEnd = () => {
+    const cleanup = () => {
       document.removeEventListener('touchmove', onMove);
       document.removeEventListener('touchend', onEnd);
+      this.detachGridTouch = null;
+    };
+    const onEnd = () => {
+      cleanup();
       if (!moved) this.openNewEntry(date, startMin, Math.min(startMin + 60, DAY_MIN));
     };
     document.addEventListener('touchmove', onMove);
     document.addEventListener('touchend', onEnd);
+    this.detachGridTouch = cleanup;
   }
 
   /** Block touch → drag to move or tap to edit. */
@@ -656,9 +666,7 @@ export class CalendarComponent implements OnDestroy {
   }
 
   private resizeInteract(entry: TimeEntry, colDate: string): Extract<Interact, { kind: 'resize' }> {
-    const startMin = this.entryStartMin(entry);
-    const endMin = Math.min(DAY_MIN, startMin + Math.round(entry.durationSeconds / 60));
-    return { kind: 'resize', entry, colDate, startMin, endMin, active: false };
+    return { kind: 'resize', entry, colDate, startMin: this.entryStartMin(entry), endMin: this.entryEndMin(entry), active: false };
   }
 
   /** Starts a drag; move/up are tracked on the document so leaving a column or block doesn't break it. */
@@ -769,6 +777,7 @@ export class CalendarComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.endDrag();
+    this.detachGridTouch?.();
     this.resizeObserver?.disconnect();
     clearInterval(this.nowTimer);
   }
@@ -883,10 +892,18 @@ export class CalendarComponent implements OnDestroy {
     // An unchanged start (resize) keeps its seconds.
     const startTime = colDate === entry.entryDate && startMin === this.entryStartMin(entry)
       ? entry.startTime : this.instantAt(colDate, startMin);
+    // An entry over midnight is drawn only up to 24:00. Resizing it shifts its real end by the
+    // dragged delta instead of clamping the end to the end of the day.
+    const overMidnight = toIsoDate(new Date(entry.startTime)) !== entry.entryDate;
+    const startKept = startTime === entry.startTime;
     const endTime = endMin === null
       ? new Date(new Date(startTime).getTime() + entry.durationSeconds * 1000).toISOString()
-      : this.instantAt(colDate, endMin);
-    const durationSeconds = endMin === null ? entry.durationSeconds : (endMin - startMin) * 60;
+      : overMidnight && startKept
+        ? new Date(new Date(entry.endTime).getTime() + (endMin - this.entryEndMin(entry)) * 60_000).toISOString()
+        : this.instantAt(colDate, endMin);
+    const durationSeconds = endMin === null
+      ? entry.durationSeconds
+      : Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000);
     const payload: TimeEntryInput = {
       projectId: entry.projectId,
       taskId: entry.taskId,
@@ -913,6 +930,18 @@ export class CalendarComponent implements OnDestroy {
   private entryStartMin(entry: TimeEntry): number {
     const d = new Date(entry.startTime);
     return d.getHours() * 60 + d.getMinutes();
+  }
+
+  /**
+   * Block end in minutes of the start day, from the wall-clock of start and end (not from
+   * durationSeconds, which drifts on DST days). Entries ending on a later day are shown up to 24:00.
+   */
+  private entryEndMin(entry: TimeEntry): number {
+    const start = new Date(entry.startTime);
+    const end = new Date(entry.endTime);
+    const startMin = start.getHours() * 60 + start.getMinutes();
+    if (toIsoDate(start) !== toIsoDate(end)) return DAY_MIN;
+    return Math.max(startMin + 1, end.getHours() * 60 + end.getMinutes());
   }
 
   private snap(minutes: number): number {

@@ -1,5 +1,6 @@
 package com.ch3xy.dash.closing;
 
+import com.ch3xy.dash.common.db.AdvisoryLocks;
 import com.ch3xy.dash.common.money.RevenueCurrency;
 import com.ch3xy.dash.settings.AppSettingsService;
 import jakarta.persistence.EntityNotFoundException;
@@ -39,11 +40,14 @@ public class MonthLockService {
     private final NamedParameterJdbcTemplate jdbc;
     private final AppSettingsService settingsService;
     private final Clock clock;
+    private final AdvisoryLocks advisoryLocks;
 
-    public MonthLockService(NamedParameterJdbcTemplate jdbc, AppSettingsService settingsService, Clock clock) {
+    public MonthLockService(NamedParameterJdbcTemplate jdbc, AppSettingsService settingsService, Clock clock,
+                            AdvisoryLocks advisoryLocks) {
         this.jdbc = jdbc;
         this.settingsService = settingsService;
         this.clock = clock;
+        this.advisoryLocks = advisoryLocks;
     }
 
     public List<MonthLockResponse> findLocks() {
@@ -61,12 +65,22 @@ public class MonthLockService {
         return Boolean.TRUE.equals(locked);
     }
 
-    /** Throws if the month of {@code date} is locked; the message is shown to the user. */
+    /**
+     * Throws if the month of {@code date} is locked; the message is shown to the user.
+     * Holds a shared lock on the month until the caller's transaction ends, so locking
+     * that month waits for the change and a change can never commit into a closed month.
+     */
     public void requireOpen(LocalDate date) {
+        guard(date);
         if (isLocked(date)) {
             throw new IllegalStateException("Der Monat " + LABEL.format(date)
                     + " ist abgeschlossen – Einträge können nicht geändert werden");
         }
+    }
+
+    /** Shared month lock for callers that check locks themselves (see {@link #requireOpen}). */
+    public void guard(LocalDate date) {
+        advisoryLocks.shared(AdvisoryLocks.MONTH, monthKey(YearMonth.from(date)));
     }
 
     @Transactional
@@ -74,6 +88,7 @@ public class MonthLockService {
         if (!month.isBefore(currentMonth())) {
             throw new IllegalArgumentException("Nur vergangene Monate können abgeschlossen werden");
         }
+        advisoryLocks.exclusive(AdvisoryLocks.MONTH, monthKey(month));
         if (isLocked(month.atDay(1))) {
             throw new IllegalStateException("Der Monat " + LABEL.format(month) + " ist bereits abgeschlossen");
         }
@@ -84,6 +99,10 @@ public class MonthLockService {
                         .addValue("lockedAt", Timestamp.from(lock.lockedAt()))
                         .addValue("note", lock.note()));
         return lock;
+    }
+
+    private static int monthKey(YearMonth month) {
+        return month.getYear() * 12 + month.getMonthValue() - 1;
     }
 
     @Transactional

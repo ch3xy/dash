@@ -35,7 +35,7 @@ import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { persistQueryParams } from '../../core/view-state';
 import { DateRangePickerComponent } from '../../shared/components/date-range-picker.component';
 import { DateRange } from '../../shared/utils/date-range';
-import { addDays, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
+import { addDays, isValidIsoDate, timeOf, toIsoDate, startOfWeek } from '../../shared/utils/date-utils';
 import {
   autoGranularity, bucketDays, bucketLabel, bucketTitle, ChartBucket, ChartDay, ChartGranularity, DENSE_CHART_BARS,
   granularityAllowed, labelVisible,
@@ -204,7 +204,14 @@ type DetailRow =
       @if (view() === 'uebersicht') {
 
       <!-- Summary cards -->
-      @if (summary(); as s) {
+      @if (summaryError()) {
+        <div class="card state mt-4">
+          <div>Der Report konnte nicht geladen werden.</div>
+          <button class="btn mt-4" (click)="reload()">Erneut versuchen</button>
+        </div>
+      } @else if (summary(); as s) {
+        <!-- Previous numbers stay visible but dimmed while a new filter is loading. -->
+        <div class="ov-wrap" [class.is-stale]="summaryLoading()" [attr.aria-busy]="summaryLoading()">
         <div class="grid grid-cards mt-4">
           <div class="card card-pad"><div class="card-title">Gesamt</div><div class="stat-value">{{ s.totalDurationSeconds | duration: 'HH:MM' }}</div>
             @if (forecast(); as fc) { <div class="stat-forecast">Prognose {{ s.totalDurationSeconds + fc.totalDurationSeconds | duration: 'HH:MM' }}</div> }
@@ -448,6 +455,9 @@ type DetailRow =
             </div>
           </div>
         </div>
+        </div>
+      } @else {
+        <div class="state"><div class="spinner"></div></div>
       }
 
       } <!-- end Übersicht -->
@@ -648,6 +658,8 @@ type DetailRow =
     /* Forecast: lighter, hatched version of the project colour */
     .ov-bar-segment-fc { opacity: 0.45; background-image: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb, var(--surface) 55%, transparent) 3px 6px); }
     .fc-label { color: var(--text-muted); font-style: italic; }
+    .ov-wrap { transition: opacity 0.15s; }
+    .ov-wrap.is-stale { opacity: 0.5; pointer-events: none; }
     .stat-forecast { margin-top: var(--sp-1); font-size: var(--fs-sm); color: var(--text-muted); font-style: italic; }
     .fc-cell { color: var(--text-muted); font-style: italic; }
     .fc-note { margin-top: var(--sp-2); font-size: var(--fs-xs); }
@@ -729,6 +741,8 @@ export class ReportsComponent {
   protected readonly tasks = signal<Task[]>([]);
   protected readonly tags = signal<Tag[]>([]);
   protected readonly summary = signal<SummaryReport | null>(null);
+  protected readonly summaryLoading = signal(true);
+  protected readonly summaryError = signal(false);
   protected readonly budget = signal<BudgetReportRow[]>([]);
   protected readonly detailed = signal<PageResponse<TimeEntry> | null>(null);
   protected readonly page = signal(0);
@@ -949,16 +963,20 @@ export class ReportsComponent {
 
   private parse(p: Record<string, string>): ReportFilter {
     const def = this.defaultFilter();
+    // An invalid or inverted range falls back to the default as a whole.
+    const valid = isValidIsoDate(p['from']) && isValidIsoDate(p['to']) && p['from'] <= p['to'];
+    const from = valid ? p['from'] : undefined;
+    const to = valid ? p['to'] : undefined;
     return {
-      from: p['from'] ?? def.from,
-      to: p['to'] ?? def.to,
+      from: from ?? def.from,
+      to: to ?? def.to,
       clientId: p['clientId'] || undefined,
       projectId: p['projectId'] || undefined,
       taskId: p['taskId'] || undefined,
       tagId: p['tagId'] || undefined,
       q: p['q'] || undefined,
       billable: p['billable'] === undefined ? undefined : p['billable'] === 'true',
-      groupBy: (p['groupBy'] as GroupBy) ?? 'PROJECT',
+      groupBy: GROUP_OPTIONS.includes(p['groupBy'] as GroupBy) ? (p['groupBy'] as GroupBy) : 'PROJECT',
       rounded: p['rounded'] === 'true' ? true : undefined,
       forecast: p['forecast'] === 'true' ? true : undefined,
       chart: ['day', 'week', 'month'].includes(p['chart']) ? (p['chart'] as ChartGranularity) : undefined,
@@ -983,7 +1001,12 @@ export class ReportsComponent {
     this.donutTip.set(null);
     const seq = ++this.loadSeq;
     const latest = <T>(set: (v: T) => void) => (v: T) => { if (seq === this.loadSeq) set(v); };
-    this.reportApi.summary(filter).subscribe(latest((s) => this.summary.set(s)));
+    this.summaryLoading.set(true);
+    this.summaryError.set(false);
+    this.reportApi.summary(filter).subscribe({
+      next: latest((s) => { this.summary.set(s); this.summaryLoading.set(false); }),
+      error: latest(() => { this.summaryLoading.set(false); this.summaryError.set(true); }),
+    });
     this.reportApi.budget(filter).subscribe(latest((b) => this.budget.set(b)));
     this.reportApi.attendance(filter.from, filter.to).subscribe(latest((a) => this.attendance.set(a)));
     this.reportApi.dailyBreakdown(filter).subscribe(latest((b) => this.dailyBreakdown.set(b)));
@@ -993,6 +1016,10 @@ export class ReportsComponent {
       this.forecast.set(null);
     }
     this.loadDetailed(filter);
+  }
+
+  protected reload(): void {
+    this.loadAll(this.f());
   }
 
   private loadDetailed(filter: ReportFilter): void {
@@ -1198,7 +1225,8 @@ export class ReportsComponent {
 
   budgetCls(b: BudgetReportRow): string {
     const pct = b.usedPercent ?? 0;
-    return pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : 'ok';
+    // Exactly 100 % is still within budget (backend: EXCEEDED only above 100 %).
+    return pct > 100 ? 'danger' : pct >= 80 ? 'warn' : 'ok';
   }
 
   min(a: number, b: number): number {

@@ -115,6 +115,10 @@ public record AppSettingsRequest(
 - `currency`: 3 Großbuchstaben (Regex `[A-Z]{3}`).
 - `roundingMinutes`: muss in `{5, 10, 15, 30}` enthalten sein (wenn `roundingRule != NONE`).
 
+**Zeitzone ändern:** wirkt nur auf neue und geänderte Einträge. Das `entry_date` bestehender Einträge wird **nicht** neu berechnet; Einträge nahe Mitternacht können danach am „falschen“ Tag stehen, bis sie bearbeitet werden.
+
+**Frontend:** Datumsrechnung im Browser (`date-utils.ts`) nutzt die Browser-Zeitzone, nicht die App-Einstellung. Für den lokalen Einzelbenutzerbetrieb (Browser und App in derselben Zone) akzeptiert.
+
 ---
 
 ## Verwendung in anderen Services

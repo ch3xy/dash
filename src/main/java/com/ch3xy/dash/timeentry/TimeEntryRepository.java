@@ -26,7 +26,7 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
               AND (CAST(:from AS date) IS NULL OR te.entry_date >= CAST(:from AS date))
               AND (CAST(:to AS date) IS NULL OR te.entry_date <= CAST(:to AS date))
               AND (CAST(:billable AS boolean) IS NULL OR te.billable = CAST(:billable AS boolean))
-              AND (CAST(:q AS text) IS NULL OR LOWER(te.description) LIKE LOWER('%' || CAST(:q AS text) || '%'))
+              AND (CAST(:q AS text) IS NULL OR strpos(LOWER(te.description), LOWER(CAST(:q AS text))) > 0)
               AND (CAST(:tagId AS uuid) IS NULL OR EXISTS (
                       SELECT 1 FROM time_entry_tags tt
                       WHERE tt.time_entry_id = te.id AND tt.tag_id = CAST(:tagId AS uuid)))
@@ -42,7 +42,7 @@ public interface TimeEntryRepository extends JpaRepository<TimeEntry, UUID> {
               AND (CAST(:from AS date) IS NULL OR te.entry_date >= CAST(:from AS date))
               AND (CAST(:to AS date) IS NULL OR te.entry_date <= CAST(:to AS date))
               AND (CAST(:billable AS boolean) IS NULL OR te.billable = CAST(:billable AS boolean))
-              AND (CAST(:q AS text) IS NULL OR LOWER(te.description) LIKE LOWER('%' || CAST(:q AS text) || '%'))
+              AND (CAST(:q AS text) IS NULL OR strpos(LOWER(te.description), LOWER(CAST(:q AS text))) > 0)
               AND (CAST(:tagId AS uuid) IS NULL OR EXISTS (
                       SELECT 1 FROM time_entry_tags tt
                       WHERE tt.time_entry_id = te.id AND tt.tag_id = CAST(:tagId AS uuid)))

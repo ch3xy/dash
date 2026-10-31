@@ -24,9 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -138,8 +140,11 @@ public class ClockifyRowImporter {
         if (name == null || name.isBlank()) {
             return null;
         }
-        return clientService.findAll(false).stream()
+        // Archived clients count too (active ones first), so re-importing after archiving
+        // a client neither creates an active duplicate nor imports its entries again.
+        return clientService.findAll(true).stream()
                 .filter(c -> c.name().equalsIgnoreCase(name))
+                .sorted(Comparator.comparing(ClientResponse::archived))
                 .map(ClientResponse::id)
                 .findFirst()
                 .orElseGet(() -> {
@@ -181,7 +186,9 @@ public class ClockifyRowImporter {
         if (raw == null || raw.isBlank()) {
             return ids;
         }
-        List<TagResponse> existing = tagService.findAll(false);
+        List<TagResponse> existing = tagService.findAll(true).stream()
+                .sorted(Comparator.comparing(TagResponse::archived))
+                .toList();
         for (String part : raw.split("[,;]")) {
             String tagName = part.trim();
             if (tagName.isEmpty()) {
@@ -209,7 +216,13 @@ public class ClockifyRowImporter {
         if (localDate == null || localTime == null) {
             return null;
         }
-        return localDate.atTime(localTime).atZone(zone).toInstant();
+        LocalDateTime local = localDate.atTime(localTime);
+        // A wall-clock time in the spring-forward gap does not exist; atZone would shift it
+        // silently. In the autumn overlap the earlier offset is used.
+        if (zone.getRules().getValidOffsets(local).isEmpty()) {
+            throw new IllegalArgumentException(local + " does not exist in " + zone + " (daylight saving gap)");
+        }
+        return local.atZone(zone).toInstant();
     }
 
     private LocalDate parseDate(String value, DateTimeFormatter slashDateFormat) {

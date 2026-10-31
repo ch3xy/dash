@@ -1,5 +1,6 @@
 package com.ch3xy.dash.timesheet;
 
+import com.ch3xy.dash.common.db.AdvisoryLocks;
 import com.ch3xy.dash.project.Project;
 import com.ch3xy.dash.project.ProjectRepository;
 import com.ch3xy.dash.settings.AppSettingsService;
@@ -45,12 +46,15 @@ public class TimesheetService {
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
     private final AppSettingsService settingsService;
+    private final AdvisoryLocks advisoryLocks;
 
     public TimesheetService(TimeEntryRepository entryRepository,
                             TimeEntryService entryService,
                             ProjectRepository projectRepository,
                             TaskRepository taskRepository,
-                            AppSettingsService settingsService) {
+                            AppSettingsService settingsService,
+                            AdvisoryLocks advisoryLocks) {
+        this.advisoryLocks = advisoryLocks;
         this.entryRepository = entryRepository;
         this.entryService = entryService;
         this.projectRepository = projectRepository;
@@ -76,6 +80,8 @@ public class TimesheetService {
             }
         }
 
+        // Serialise per day: the cell total is read, then only the difference is written.
+        advisoryLocks.exclusive(AdvisoryLocks.TIMESHEET_DAY, (int) req.date().toEpochDay());
         List<TimeEntry> dayEntries = entryRepository.findByEntryDateRange(req.date(), req.date());
         List<TimeEntry> cell = dayEntries.stream()
                 .filter(e -> e.getProject().getId().equals(req.projectId()))

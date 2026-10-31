@@ -24,11 +24,11 @@ Das Ergebnis wird als **Snapshot** auf `TimeEntry.hourlyRateSnapshot` und `TimeE
 ## 2. Umsatzberechnung
 
 ```
-amountSnapshot = (durationSeconds / 3600.0) * hourlyRateSnapshot
+amountSnapshot = durationSeconds * hourlyRateSnapshot / 3600
 ```
 
 - Berechnet beim Stoppen des Timers oder beim manuellen Erstellen eines Eintrags.
-- `BigDecimal`-Arithmetik, `RoundingMode.HALF_UP` auf 2 Nachkommastellen.
+- `BigDecimal`-Arithmetik: erst multiplizieren, dann **einmal** mit `RoundingMode.HALF_UP` auf 2 Nachkommastellen runden (120 s × 10,65 €/h = 0,355 → 0,36).
 - Nicht abrechenbare Einträge (`billable = false`) bekommen `amountSnapshot = 0.00` (oder `null`).
 
 ---
@@ -46,8 +46,10 @@ usedPercent     = usedMinutes / project.hourBudgetMinutes * 100.0
 | `budgetReset` | Zeitraum für SUM |
 |---|---|
 | `NONE` | Alle Zeiteinträge des Projekts |
-| `MONTHLY` | Laufender Kalendermonat (`entry_date >= first_day_of_month`) |
-| `YEARLY` | Laufendes Kalenderjahr (`entry_date >= first_day_of_year`) |
+| `MONTHLY` | Laufender Kalendermonat (erster bis letzter Tag; in den Folgemonat vorgebuchte Einträge zählen nicht) |
+| `YEARLY` | Laufendes Kalenderjahr (1.1. bis 31.12.) |
+
+„Heute“ kommt aus der `Clock` in der App-Zeitzone.
 
 ### Status-Schwellen
 
@@ -65,6 +67,8 @@ Ohne Stundenbudget (`null`) gilt `NO_BUDGET`: `usedMinutes` und Umsatz werden tr
 
 Die Rohdauer (`durationSeconds`) wird **immer unverändert gespeichert**.  
 Rundung wird nur für Reports und Berechnungen auf Anfrage angewendet (`?rounded=true`). Detailreport und CSV/XLSX-Export runden je Eintrag (`DurationRounding`); Beträge bleiben Snapshots der Rohdauer.
+
+**Entscheidung (Review 2026-10-27):** Auch mit `rounded=true` bleibt der Umsatz die Summe der `amountSnapshot` (Rohdauer). Gerundete Stunden × Satz ergibt daher nicht zwingend den angezeigten Umsatz. Abgerechnet wird der gespeicherte Snapshot; die gerundete Dauer ist eine Anzeige-/Exporthilfe.
 
 | `roundingRule` | `roundingMinutes` | Beschreibung |
 |---|---|---|
@@ -124,9 +128,9 @@ Archivierte Projekte/Tasks/Clients bleiben in **alten TimeEntries und Reports** 
 | Feld | Regel |
 |---|---|
 | `TimeEntry.endTime` | > `startTime` |
-| `TimeEntry.durationSeconds` | > 0 |
+| `TimeEntry.durationSeconds` | > 0 und höchstens 31 Tage (Schutz vor Tippfehlern im Jahr, auch beim Timer-Stopp und Import) |
 | `Client.name` | nicht leer, unique unter aktiven Clients (case-insensitive) |
-| `Project.name` | nicht leer, unique je Client (case-insensitive) |
+| `Project.name` | nicht leer, unique je Client (case-insensitive); Projekte ohne Client sind untereinander ebenfalls unique (nur Service-Prüfung, der DB-Index behandelt `NULL` als verschieden) |
 | `Task.name` | nicht leer, unique je Projekt (case-insensitive) |
 | `Tag.name` | nicht leer, unique unter aktiven Tags (case-insensitive) |
 | `ProjectRate.hourlyRate` | ≥ 0 |

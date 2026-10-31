@@ -16,10 +16,11 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
     List<Project> findAllByClientIdAndStatusNotOrderByNameAsc(UUID clientId, ProjectStatus status);
 
-    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE lower(p.name) = lower(:name) AND p.client.id = :clientId AND p.id <> :excludeId")
+    // "IS NOT DISTINCT FROM" semantics, so projects without a client are unique among themselves too.
+    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE lower(p.name) = lower(:name) AND ((:clientId IS NULL AND p.client IS NULL) OR p.client.id = :clientId) AND p.id <> :excludeId")
     boolean existsByNameIgnoreCaseAndClientIdExcluding(String name, UUID clientId, UUID excludeId);
 
-    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE lower(p.name) = lower(:name) AND p.client.id = :clientId")
+    @Query("SELECT COUNT(p) > 0 FROM Project p WHERE lower(p.name) = lower(:name) AND ((:clientId IS NULL AND p.client IS NULL) OR p.client.id = :clientId)")
     boolean existsByNameIgnoreCaseAndClientId(String name, UUID clientId);
 
     @Query("SELECT COUNT(p) > 0 FROM Project p WHERE p.client.id = :clientId")

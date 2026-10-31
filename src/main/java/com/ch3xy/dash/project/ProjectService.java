@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -23,12 +24,15 @@ public class ProjectService {
     private final ClientRepository clientRepository;
     private final AppSettingsService settingsService;
     private final JdbcTemplate jdbc;
+    private final Clock clock;
 
     public ProjectService(ProjectRepository projectRepository,
                           ProjectRateRepository rateRepository,
                           ClientRepository clientRepository,
                           AppSettingsService settingsService,
-                          JdbcTemplate jdbc) {
+                          JdbcTemplate jdbc,
+                          Clock clock) {
+        this.clock = clock;
         this.projectRepository = projectRepository;
         this.rateRepository = rateRepository;
         this.clientRepository = clientRepository;
@@ -80,16 +84,18 @@ public class ProjectService {
         Project project = require(id);
         String period;
         LocalDate from;
-        LocalDate today = LocalDate.now(settingsService.getTimezone());
+        LocalDate to;
+        LocalDate today = LocalDate.now(clock.withZone(settingsService.getTimezone()));
 
+        // Entries pre-booked into a later period do not count against the current one.
         switch (project.getBudgetReset()) {
-            case MONTHLY -> { period = "CURRENT_MONTH"; from = today.withDayOfMonth(1); }
-            case YEARLY  -> { period = "CURRENT_YEAR";  from = today.withDayOfYear(1); }
-            default      -> { period = "ALL_TIME"; from = null; }
+            case MONTHLY -> { period = "CURRENT_MONTH"; from = today.withDayOfMonth(1); to = from.plusMonths(1).minusDays(1); }
+            case YEARLY  -> { period = "CURRENT_YEAR";  from = today.withDayOfYear(1); to = from.plusYears(1).minusDays(1); }
+            default      -> { period = "ALL_TIME"; from = null; to = null; }
         }
 
-        Long usedSeconds = queryUsedSeconds(id, from);
-        BigDecimal revenue = queryRevenue(id, from);
+        Long usedSeconds = queryUsedSeconds(id, from, to);
+        BigDecimal revenue = queryRevenue(id, from, to);
 
         int usedMinutes = (int) (usedSeconds / 60);
         // Usage and revenue are reported even without an hour budget (e.g. for a money budget).
@@ -162,29 +168,26 @@ public class ProjectService {
         project.setBudgetReset(req.budgetReset() != null ? req.budgetReset() : BudgetReset.NONE);
     }
 
-    private Long queryUsedSeconds(UUID projectId, LocalDate from) {
-        if (from == null) {
-            Long result = jdbc.queryForObject(
-                    "SELECT COALESCE(SUM(duration_seconds), 0) FROM time_entries WHERE project_id = ?",
-                    Long.class, projectId);
-            return result != null ? result : 0L;
-        }
-        Long result = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(duration_seconds), 0) FROM time_entries WHERE project_id = ? AND entry_date >= ?",
-                Long.class, projectId, from);
+    /** Sum over the project's entries, restricted to {@code from..to} when both are given. */
+    private Long queryUsedSeconds(UUID projectId, LocalDate from, LocalDate to) {
+        Long result = from == null
+                ? jdbc.queryForObject(
+                        "SELECT COALESCE(SUM(duration_seconds), 0) FROM time_entries WHERE project_id = ?",
+                        Long.class, projectId)
+                : jdbc.queryForObject(
+                        "SELECT COALESCE(SUM(duration_seconds), 0) FROM time_entries WHERE project_id = ? AND entry_date BETWEEN ? AND ?",
+                        Long.class, projectId, from, to);
         return result != null ? result : 0L;
     }
 
-    private BigDecimal queryRevenue(UUID projectId, LocalDate from) {
-        if (from == null) {
-            BigDecimal result = jdbc.queryForObject(
-                    "SELECT COALESCE(SUM(amount_snapshot), 0) FROM time_entries WHERE project_id = ? AND billable = true",
-                    BigDecimal.class, projectId);
-            return result != null ? result.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
-        }
-        BigDecimal result = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(amount_snapshot), 0) FROM time_entries WHERE project_id = ? AND billable = true AND entry_date >= ?",
-                BigDecimal.class, projectId, from);
+    private BigDecimal queryRevenue(UUID projectId, LocalDate from, LocalDate to) {
+        BigDecimal result = from == null
+                ? jdbc.queryForObject(
+                        "SELECT COALESCE(SUM(amount_snapshot), 0) FROM time_entries WHERE project_id = ? AND billable = true",
+                        BigDecimal.class, projectId)
+                : jdbc.queryForObject(
+                        "SELECT COALESCE(SUM(amount_snapshot), 0) FROM time_entries WHERE project_id = ? AND billable = true AND entry_date BETWEEN ? AND ?",
+                        BigDecimal.class, projectId, from, to);
         return result != null ? result.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
     }
 

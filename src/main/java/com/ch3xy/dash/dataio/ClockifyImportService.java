@@ -47,8 +47,12 @@ public class ClockifyImportService {
             DateTimeFormatter slashDateFormat = ClockifyRowImporter.detectSlashDateFormat(records, warnings);
             for (CSVRecord record : records) {
                 rowNumber++;
+                // Counted per row and merged only on success: a failed row rolls back what it created.
+                ImportCounters rowCounters = new ImportCounters();
                 try {
-                    switch (rowImporter.importRow(record, counters, slashDateFormat)) {
+                    RowOutcome outcome = rowImporter.importRow(record, rowCounters, slashDateFormat);
+                    counters.add(rowCounters);
+                    switch (outcome) {
                         case IMPORTED -> imported++;
                         case DUPLICATE -> duplicates++;
                         case INVALID -> warnings.add("Row " + rowNumber + ": skipped (missing or invalid start/end)");

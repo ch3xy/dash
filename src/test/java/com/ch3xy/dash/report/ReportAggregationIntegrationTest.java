@@ -160,6 +160,14 @@ class ReportAggregationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void csvTextStartingLikeFormulaIsQuoted() {
+        assertThat(CsvExportService.text("=HYPERLINK(\"x\")")).isEqualTo("'=HYPERLINK(\"x\")");
+        assertThat(CsvExportService.text("-5")).isEqualTo("'-5");
+        assertThat(CsvExportService.text("plain")).isEqualTo("plain");
+        assertThat(CsvExportService.text("")).isEmpty();
+    }
+
+    @Test
     void summaryFlagsMixedCurrenciesAndLabelsSingleCurrency() {
         ClientResponse client = clientService.create(new ClientRequest("Currency Client " + System.nanoTime(), null, null, null, "EUR"));
         ProjectResponse eur = projectService.create(new ProjectRequest(

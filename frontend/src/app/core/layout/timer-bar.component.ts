@@ -59,6 +59,7 @@ import { LucidePlay, LucideSquare, LucideX } from '@lucide/angular';
           <div class="tag-wrap">
             <button type="button" class="btn btn-ghost btn-sm tag-btn"
                     (click)="toggleTagPanel($event)"
+                    title="Tags" aria-label="Tags"
                     [class.tag-btn-active]="selectedTagIds().length > 0">
               🏷
               @if (selectedTagIds().length > 0) {
@@ -81,7 +82,7 @@ import { LucidePlay, LucideSquare, LucideX } from '@lucide/angular';
         }
 
         <label class="switch" title="Abrechenbar">
-          <input type="checkbox" [(ngModel)]="billable" />
+          <input type="checkbox" [(ngModel)]="billable" aria-label="Abrechenbar" />
           <span class="faint">€</span>
         </label>
         <button class="btn btn-primary btn-sm" (click)="start()" [disabled]="!projectId" title="Timer starten (s)"><svg lucidePlay></svg> Start</button>
@@ -154,6 +155,12 @@ export class TimerBarComponent {
     this.shortcuts.commands$.pipe(takeUntilDestroyed()).subscribe((cmd) => {
       if (cmd === 'focus-timer') {
         this.descInput()?.nativeElement.focus();
+      } else if (cmd === 'start-timer') {
+        if (this.projectId) {
+          this.start();
+        } else {
+          this.descInput()?.nativeElement.focus();
+        }
       }
     });
   }

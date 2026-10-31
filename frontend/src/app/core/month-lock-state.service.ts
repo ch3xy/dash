@@ -43,6 +43,20 @@ export class MonthLockStateService {
 
   /** True if any day in [from, to] (ISO dates) lies in a closed month. */
   anyLocked(from: string, to: string): boolean {
-    return this.isLocked(from) || this.isLocked(to);
+    if (this.lockedMonths().size === 0) {
+      return false;
+    }
+    let [y, m] = from.slice(0, 7).split('-').map(Number);
+    const [ty, tm] = to.slice(0, 7).split('-').map(Number);
+    while (y < ty || (y === ty && m <= tm)) {
+      if (this.lockedMonths().has(`${y}-${String(m).padStart(2, '0')}`)) {
+        return true;
+      }
+      if (++m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+    return false;
   }
 }

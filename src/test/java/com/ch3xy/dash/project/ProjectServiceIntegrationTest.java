@@ -57,6 +57,33 @@ class ProjectServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void projectNamesWithoutClientAreUniqueToo() {
+        String name = "No Client Unique " + System.nanoTime();
+        newProject(name);
+
+        assertThatThrownBy(() -> newProject(name.toUpperCase()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already exists");
+    }
+
+    @Test
+    void monthlyBudgetIgnoresEntriesPreBookedIntoNextMonth() {
+        ProjectResponse project = service.create(new ProjectRequest(
+                null, "Monthly Budget " + System.nanoTime(), null, null, true,
+                new BigDecimal("80.00"), "EUR", 600, null, BudgetReset.MONTHLY));
+        java.time.LocalDate firstOfMonth = java.time.LocalDate.now(java.time.ZoneId.of("Europe/Vienna")).withDayOfMonth(1);
+        Instant thisMonth = firstOfMonth.atTime(10, 0).atZone(java.time.ZoneId.of("Europe/Vienna")).toInstant();
+        Instant nextMonth = firstOfMonth.plusMonths(1).atTime(10, 0).atZone(java.time.ZoneId.of("Europe/Vienna")).toInstant();
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "now", thisMonth, thisMonth.plusSeconds(3600), true, Set.of()));
+        timeEntryService.create(new TimeEntryRequest(project.id(), null, "later", nextMonth, nextMonth.plusSeconds(7200), true, Set.of()));
+
+        BudgetStatusResponse status = service.getBudgetStatus(project.id());
+
+        assertThat(status.usedMinutes()).isEqualTo(60);
+        assertThat(status.revenueAmount()).isEqualByComparingTo("80.00");
+    }
+
+    @Test
     void budgetStatusReportsOnTrackForEmptyProject() {
         ProjectResponse project = newProject("Budget Project");
         BudgetStatusResponse status = service.getBudgetStatus(project.id());

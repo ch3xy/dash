@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
@@ -92,6 +93,11 @@ import { ClientFormDialogComponent } from './client-form-dialog.component';
             </table>
           }
         </div>
+      } @else if (loadError(); as err) {
+        <div class="state">
+          <div>{{ err === 'notFound' ? 'Kunde nicht gefunden.' : 'Kunde konnte nicht geladen werden.' }}</div>
+          <a routerLink="/clients" class="muted back-link"><svg lucideArrowLeft></svg> Kunden</a>
+        </div>
       } @else {
         <div class="state"><div class="spinner"></div></div>
       }
@@ -119,6 +125,8 @@ export class ClientDetailComponent {
   /** projectId -> budget usage in the current budget period (only active projects with an hour budget). */
   protected readonly budgets = signal<Record<string, BudgetReportRow>>({});
   protected readonly editing = signal(false);
+  /** Set when the client itself could not be loaded (404 vs. any other failure). */
+  protected readonly loadError = signal<'notFound' | 'error' | null>(null);
   protected readonly websiteHref = websiteHref;
 
   constructor() {
@@ -127,6 +135,7 @@ export class ClientDetailComponent {
       const id = this.id();
       untracked(() => {
         this.client.set(null);
+        this.loadError.set(null);
         this.projects.set([]);
         this.summary.set(null);
         this.loadAll(id);
@@ -137,7 +146,10 @@ export class ClientDetailComponent {
   private loadAll(id = this.id()): void {
     // Responses for a client that is no longer shown are dropped.
     const current = <T>(set: (v: T) => void) => (v: T) => { if (this.id() === id) set(v); };
-    this.api.get(id).subscribe(current((c) => this.client.set(c)));
+    this.api.get(id).subscribe({
+      next: current((c) => this.client.set(c)),
+      error: current((e: HttpErrorResponse) => this.loadError.set(e.status === 404 ? 'notFound' : 'error')),
+    });
     // The project endpoint has no client filter; the list is small, so filter here.
     this.projectApi
       .getAll({ archived: true })

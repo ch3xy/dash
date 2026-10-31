@@ -1,4 +1,4 @@
-import { addDays, startOfWeek, timeOf, toInstant, toIsoDate } from './date-utils';
+import { addDays, isValidIsoDate, startOfWeek, timeOf, toInstant, toIsoDate } from './date-utils';
 
 describe('date-utils', () => {
   it('toIsoDate formats local Y-M-D zero-padded', () => {
@@ -20,5 +20,15 @@ describe('date-utils', () => {
   it('toInstant and timeOf round-trip a local time', () => {
     const instant = toInstant('2026-06-19', '14:30');
     expect(timeOf(instant)).toBe('14:30');
+  });
+
+  it('isValidIsoDate accepts real days only', () => {
+    expect(isValidIsoDate('2026-02-28')).toBe(true);
+    expect(isValidIsoDate('2024-02-29')).toBe(true);
+    expect(isValidIsoDate('2026-02-30')).toBe(false);
+    expect(isValidIsoDate('2026-2-3')).toBe(false);
+    expect(isValidIsoDate('abc')).toBe(false);
+    expect(isValidIsoDate('')).toBe(false);
+    expect(isValidIsoDate(null)).toBe(false);
   });
 });

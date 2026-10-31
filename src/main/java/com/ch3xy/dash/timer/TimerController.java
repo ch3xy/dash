@@ -47,11 +47,11 @@ public class TimerController {
 
     @Operation(
             summary = "Laufenden Timer stoppen und Zeiteintrag erstellen",
-            description = "Stoppt den aktiven Timer und speichert ihn als abgeschlossenen Zeiteintrag. Der Stundensatz-Snapshot wird anhand der Ratenpriorität (Task > Projekt > App-Default) ermittelt. Optional kann im Body eine abweichende Endzeit übergeben werden."
+            description = "Stoppt den aktiven Timer und speichert ihn als abgeschlossenen Zeiteintrag. Der Stundensatz-Snapshot wird anhand der Ratenpriorität (Task > Projekt > App-Default) ermittelt. Optional kann im Body eine abweichende Beschreibung übergeben werden; die Endzeit ist immer der Zeitpunkt des Stopps."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Timer gestoppt, Zeiteintrag angelegt"),
-            @ApiResponse(responseCode = "400", description = "Angegebene Endzeit liegt vor der Startzeit oder ergibt eine Dauer ≤ 0"),
+            @ApiResponse(responseCode = "400", description = "Dauer ≤ 0 oder länger als 31 Tage"),
             @ApiResponse(responseCode = "404", description = "Kein laufender Timer vorhanden")
     })
     @PostMapping("/stop")

@@ -40,6 +40,7 @@ export class DialogService {
 
   confirm(opts: ConfirmOptions): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
+      this.dismissPending();
       this.request.set({
         kind: 'confirm',
         title: opts.title ?? 'Bestätigen',
@@ -55,6 +56,7 @@ export class DialogService {
 
   prompt(opts: PromptOptions): Promise<string | null> {
     return new Promise<string | null>((resolve) => {
+      this.dismissPending();
       this.request.set({
         kind: 'prompt',
         title: opts.title,
@@ -68,5 +70,14 @@ export class DialogService {
         resolve: (v) => resolve(typeof v === 'string' ? v : null),
       });
     });
+  }
+
+  /** A new dialog replaces an open one; resolve the old one as cancelled so its promise settles. */
+  private dismissPending(): void {
+    const pending = this.request();
+    if (pending) {
+      pending.resolve(pending.kind === 'prompt' ? null : false);
+      this.request.set(null);
+    }
   }
 }

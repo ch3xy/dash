@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -22,6 +23,7 @@ import { ProjectFormDialogComponent } from './project-form-dialog.component';
 
 type Tab = 'tasks' | 'rates';
 
+import { today } from '../../shared/utils/date-utils';
 import { nonNegativeError } from '../../shared/utils/form-checks';
 @Component({
   selector: 'app-project-detail',
@@ -141,6 +143,11 @@ import { nonNegativeError } from '../../shared/utils/form-checks';
             </table>
           </div>
         }
+      } @else if (loadError(); as err) {
+        <div class="state">
+          <div>{{ err === 'notFound' ? 'Projekt nicht gefunden.' : 'Projekt konnte nicht geladen werden.' }}</div>
+          <a routerLink="/projects" class="muted back-link"><svg lucideArrowLeft></svg> Projekte</a>
+        </div>
       } @else {
         <div class="state"><div class="spinner"></div></div>
       }
@@ -206,6 +213,8 @@ export class ProjectDetailComponent {
   /** taskId -> tracked seconds over the whole project lifetime */
   protected readonly taskSeconds = signal<Record<string, number>>({});
   protected readonly editingProject = signal(false);
+  /** Set when the project itself could not be loaded (404 vs. any other failure). */
+  protected readonly loadError = signal<'notFound' | 'error' | null>(null);
   /** Rate-history entry valid right now; it takes precedence over the project's default rate. */
   protected readonly activeRate = computed(() => {
     const now = Date.now();
@@ -222,7 +231,7 @@ export class ProjectDetailComponent {
 
   protected newTask = '';
   protected rateValue: number | null = null;
-  protected rateFrom = new Date().toISOString().slice(0, 10);
+  protected rateFrom = today();
   protected rateNote = '';
 
   constructor() {
@@ -231,6 +240,7 @@ export class ProjectDetailComponent {
       const id = this.id();
       untracked(() => {
         this.project.set(null);
+        this.loadError.set(null);
         this.budget.set(null);
         this.tasks.set([]);
         this.rates.set([]);
@@ -243,7 +253,10 @@ export class ProjectDetailComponent {
   private loadAll(id = this.id()): void {
     // Responses for a project that is no longer shown are dropped.
     const current = <T>(set: (v: T) => void) => (v: T) => { if (this.id() === id) set(v); };
-    this.api.get(id).subscribe(current((p) => this.project.set(p)));
+    this.api.get(id).subscribe({
+      next: current((p) => this.project.set(p)),
+      error: current((e: HttpErrorResponse) => this.loadError.set(e.status === 404 ? 'notFound' : 'error')),
+    });
     this.api.budgetStatus(id).subscribe(current((b) => this.budget.set(b)));
     this.loadTasks(id);
     this.api.rates(id).subscribe(current((r) => this.rates.set(r)));
@@ -282,7 +295,8 @@ export class ProjectDetailComponent {
 
   budgetClass(b: BudgetStatus): string {
     const pct = b.usedPercent ?? 0;
-    return pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : 'ok';
+    // Exactly 100 % is still within budget (backend: EXCEEDED only above 100 %).
+    return pct > 100 ? 'danger' : pct >= 80 ? 'warn' : 'ok';
   }
 
   onProjectSaved(p: Project): void {

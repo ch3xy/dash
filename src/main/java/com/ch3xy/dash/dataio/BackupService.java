@@ -15,6 +15,7 @@ import com.ch3xy.dash.timeentry.TimeEntryResponse;
 import com.ch3xy.dash.timeentry.TimeEntryService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -51,7 +52,8 @@ public class BackupService {
         this.monthLockService = monthLockService;
     }
 
-    @Transactional(readOnly = true)
+    /** Repeatable read: all queries see one snapshot, so the backup is consistent and restorable. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public BackupDocument export() {
         List<ProjectResponse> projects = projectService.findAll(true);
 

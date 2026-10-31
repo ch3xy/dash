@@ -2,12 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { TimerStateService } from './timer-state.service';
 
-export type ShortcutCommand = 'new-entry' | 'focus-timer' | 'focus-search';
+export type ShortcutCommand = 'new-entry' | 'focus-timer' | 'focus-search' | 'start-timer';
 
 /**
  * Global keyboard shortcuts:
  *   n → neuer Zeiteintrag, t → Timer fokussieren, s → Timer start/stop, / → Suche/Timer.
- * Ignored while typing in an input/textarea/select or contenteditable element.
+ * `s` starts via the timer bar (which focuses its input if no project is chosen yet).
+ * Ignored while typing in an input/textarea/select or contenteditable element,
+ * while a modal dialog is open, and for auto-repeated key events.
  * Component-level actions are emitted via `commands$`; global ones run here directly.
  */
 @Injectable({ providedIn: 'root' })
@@ -28,7 +30,7 @@ export class KeyboardShortcutService {
   }
 
   private handle(e: KeyboardEvent): void {
-    if (e.ctrlKey || e.metaKey || e.altKey || isEditable(e.target)) {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isEditable(e.target) || isDialogOpen()) {
       return;
     }
     switch (e.key) {
@@ -49,7 +51,7 @@ export class KeyboardShortcutService {
         if (this.timerState.isRunning()) {
           this.timerState.stop().subscribe();
         } else {
-          this.commands.next('focus-timer');
+          this.commands.next('start-timer');
         }
         break;
     }
@@ -63,4 +65,8 @@ function isEditable(target: EventTarget | null): boolean {
   }
   const tag = el.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
+function isDialogOpen(): boolean {
+  return document.querySelector('.dialog-backdrop, [aria-modal="true"]') !== null;
 }

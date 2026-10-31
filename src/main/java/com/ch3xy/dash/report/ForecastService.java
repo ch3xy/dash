@@ -83,6 +83,7 @@ public class ForecastService {
         }
         LocalDate from = filter.from() != null && filter.from().isAfter(today) ? filter.from() : today.plusDays(1);
         LocalDate to = filter.to();
+        ReportFilter.requireDayRange(from, to);
         LocalDate sourceFrom = from.minusWeeks(SOURCE_OFFSET_WEEKS);
         LocalDate sourceTo = to.minusWeeks(SOURCE_OFFSET_WEEKS);
         GroupBy groupBy = filter.groupBy() != null ? filter.groupBy() : GroupBy.PROJECT;

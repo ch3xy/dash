@@ -99,6 +99,49 @@ class TimeEntryServiceIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void exactHalfCentAmountRoundsUp() {
+        ProjectResponse project = projectService.create(new ProjectRequest(
+                null, "Half Cent " + System.nanoTime(), null, null, true,
+                new BigDecimal("10.65"), "EUR", null, null, BudgetReset.NONE));
+
+        // 120 s at 10.65/h = 0.355
+        TimeEntryResponse entry = service.create(new TimeEntryRequest(
+                project.id(), null, "x", START, START.plusSeconds(120), true, Set.of()));
+
+        assertThat(entry.amountSnapshot()).isEqualByComparingTo("0.36");
+    }
+
+    @Test
+    void entryLongerThanMaximumIsRejected() {
+        ProjectResponse project = projectWithDefaultRate();
+
+        assertThatThrownBy(() -> service.create(new TimeEntryRequest(
+                project.id(), null, "x", START, START.plus(TimeEntryService.MAX_DURATION).plusSeconds(1), true, Set.of())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("31 days");
+    }
+
+    @Test
+    void searchTreatsWildcardsLiterally() {
+        ProjectResponse project = projectWithDefaultRate();
+        service.create(new TimeEntryRequest(project.id(), null, "100% done", START, END, true, Set.of()));
+        service.create(new TimeEntryRequest(project.id(), null, "1000 lines", END, END.plusSeconds(60), true, Set.of()));
+
+        var percent = service.findAll(new TimeEntryFilter(null, null, null, project.id(), null, null, null, "0%"),
+                PageRequest.of(0, 20));
+        var underscore = service.findAll(new TimeEntryFilter(null, null, null, project.id(), null, null, null, "1_0"),
+                PageRequest.of(0, 20));
+
+        assertThat(percent.getContent()).extracting(TimeEntryResponse::description).containsExactly("100% done");
+        assertThat(underscore.getContent()).isEmpty();
+    }
+
+    @Test
+    void recentCombinationsToleratesNegativeLimit() {
+        assertThat(service.recentCombinations(-5)).hasSizeLessThanOrEqualTo(1);
+    }
+
+    @Test
     void clientSuppliedSortIsIgnoredAndDoesNotBreakTheNativeQuery() {
         ProjectResponse project = projectWithDefaultRate();
         service.create(new TimeEntryRequest(project.id(), null, "x", START, END, true, Set.of()));

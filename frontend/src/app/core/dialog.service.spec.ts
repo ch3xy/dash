@@ -30,4 +30,14 @@ describe('DialogService', () => {
     svc.request()!.resolve(null);
     await expect(p).resolves.toBeNull();
   });
+
+  it('a second dialog cancels the first instead of orphaning its promise', async () => {
+    const svc = new DialogService();
+    const first = svc.confirm({ message: 'one' });
+    const second = svc.confirm({ message: 'two' });
+    await expect(first).resolves.toBe(false);
+    expect(svc.request()?.message).toBe('two');
+    svc.request()!.resolve(true);
+    await expect(second).resolves.toBe(true);
+  });
 });

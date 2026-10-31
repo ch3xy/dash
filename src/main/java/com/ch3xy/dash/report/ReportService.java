@@ -146,6 +146,7 @@ public class ReportService {
                 : LocalDate.now(settingsService.getTimezone()).minusDays(29);
         LocalDate to = filter.to() != null ? filter.to()
                 : LocalDate.now(settingsService.getTimezone());
+        ReportFilter.requireDayRange(from, to);
 
         RoundingRule rule = rounded ? settingsService.getRoundingRule() : RoundingRule.NONE;
         int minutes = rounded ? settingsService.getRoundingMinutes() : 0;
@@ -171,6 +172,9 @@ public class ReportService {
 
     public HeatmapResponse getHeatmap(Integer year) {
         int y = year != null ? year : LocalDate.now(settingsService.getTimezone()).getYear();
+        if (y < 1970 || y > 9999) {
+            throw new IllegalArgumentException("year: must be between 1970 and 9999");
+        }
         LocalDate from = LocalDate.of(y, 1, 1);
         LocalDate to = LocalDate.of(y, 12, 31);
         List<HeatmapDay> data = queryRepository.heatmap(from, to);

@@ -330,7 +330,7 @@ TimeEntry-Objekten (Format wie `POST /time-entries`). Response: Array der erstel
 
 ### `GET /time-entries/recent-combinations?limit=5` → `200`
 
-Zuletzt verwendete Projekt/Task-Kombinationen für Schnellstart:
+Zuletzt verwendete Projekt/Task-Kombinationen für Schnellstart. `limit` wird auf 1–100 begrenzt:
 ```json
 [
   { "projectId": "uuid", "projectName": "string", "taskId": "uuid|null", "taskName": "string|null" }
@@ -435,7 +435,7 @@ Alle Reports: Query-Params als Filter.
 | `taskId` | uuid[] | Task(s) |
 | `tagId` | uuid[] | Tag(s) |
 | `billable` | boolean | Nur abrechenbar/nicht |
-| `q` | string | Beschreibungssuche (enthält, case-insensitive) |
+| `q` | string | Beschreibungssuche (enthält, case-insensitive; `%` und `_` sind normale Zeichen) |
 | `groupBy` | string | `PROJECT`, `CLIENT`, `TASK`, `TAG`, `DAY`, `WEEK`, `MONTH`. Bei `TAG` erscheint ein Eintrag mit mehreren Tags in jeder seiner Gruppen; Einträge ohne Tag landen in „No tag“ (`key: null`). Die Totals zählen jeden Eintrag genau einmal. |
 | `rounded` | boolean | Gerundete Dauer verwenden |
 
@@ -531,11 +531,11 @@ Umsatz nach Kunde/Projekt/Monat.
 }
 ```
 
-`intensity` = `durationSeconds / (8 * 3600)`, max 1.0.
+`intensity` = `durationSeconds / (8 * 3600)`, max 1.0. `year` muss zwischen 1970 und 9999 liegen (sonst `400`).
 
 ### `GET /reports/daily-breakdown`
 
-Gleiche Filter wie `/summary` plus `rounded` (Dauern gemäß Rundungsregel, wie Summary und Prognose). Ein Eintrag pro Kalendertag (auch leere Tage), je Tag die Projektsegmente fürs gestapelte Balkendiagramm samt Hover-Infos:
+Gleiche Filter wie `/summary` plus `rounded` (Dauern gemäß Rundungsregel, wie Summary und Prognose). Zeitraum höchstens 3660 Tage (gilt auch für die Prognose), sonst `400`. Ein Eintrag pro Kalendertag (auch leere Tage), je Tag die Projektsegmente fürs gestapelte Balkendiagramm samt Hover-Infos:
 
 ```json
 { "days": [ { "date": "2026-10-21", "totalSeconds": 10800, "projects": [
@@ -571,7 +571,8 @@ Gleiche Filter wie `/summary` plus `rounded`. Prognose für die Tage **nach heut
 
 Header: `Content-Disposition: attachment; filename="report-2026-06.csv"`  
 Spalten: Date, Client, Project, Task, Description, Start, End, Duration, Billable, Rate, Amount, Tags  
-`rounded=true` exportiert gerundete Dauern (auch XLSX); Amount bleibt der Snapshot.
+`rounded=true` exportiert gerundete Dauern (auch XLSX); Amount bleibt der Snapshot.  
+Freitext (Client, Project, Task, Description, Tags), der mit `=`, `+`, `-`, `@`, Tab oder CR beginnt, bekommt ein führendes `'` (Schutz vor Formel-Injection in Tabellenprogrammen).
 
 ### `GET /reports/export.xlsx`
 

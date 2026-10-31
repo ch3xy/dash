@@ -1,6 +1,7 @@
 package com.ch3xy.dash.dataio;
 
 import com.ch3xy.dash.AbstractIntegrationTest;
+import com.ch3xy.dash.client.ClientService;
 import com.ch3xy.dash.project.BudgetReset;
 import com.ch3xy.dash.project.ProjectRateRequest;
 import com.ch3xy.dash.project.ProjectRequest;
@@ -31,6 +32,7 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
     @Autowired BackupService backupService;
     @Autowired BackupRestoreService backupRestoreService;
     @Autowired ProjectService projectService;
+    @Autowired ClientService clientService;
     @Autowired TimeEntryService timeEntryService;
 
     @Test
@@ -74,6 +76,54 @@ class DataIoIntegrationTest extends AbstractIntegrationTest {
         assertThat(second.skippedDuplicates()).isEqualTo(3);
         assertThat(second.createdProjects()).isZero();
         assertThat(second.warnings()).isEmpty();
+    }
+
+    @Test
+    void clockifyReimportAfterArchivingClientCreatesNoDuplicates() {
+        String csv = """
+                Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time
+                ClkArch Project,ClkArch Client,work,,ClkArchTag,Yes,2026-07-12,08:00:00,2026-07-12,10:00:00
+                """;
+        importService.importCsv(csv);
+        UUID clientId = clientService.findAll(false).stream()
+                .filter(c -> c.name().equals("ClkArch Client")).findFirst().orElseThrow().id();
+        clientService.archive(clientId);
+
+        ImportResult again = importService.importCsv(csv);
+
+        assertThat(again.importedEntries()).isZero();
+        assertThat(again.skippedDuplicates()).isEqualTo(1);
+        assertThat(again.createdClients()).isZero();
+        assertThat(again.createdTags()).isZero();
+    }
+
+    @Test
+    void clockifyImportDoesNotCountObjectsOfFailedRow() {
+        String csv = """
+                Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time
+                ClkFail Project,ClkFail Client,way too long,,,Yes,2026-07-01,08:00:00,2026-09-01,08:00:00
+                """;
+
+        ImportResult result = importService.importCsv(csv);
+
+        assertThat(result.importedEntries()).isZero();
+        assertThat(result.createdClients()).isZero();
+        assertThat(result.createdProjects()).isZero();
+        assertThat(result.warnings()).singleElement().asString().contains("31 days");
+    }
+
+    @Test
+    void clockifyImportRejectsTimeInDaylightSavingGap() {
+        // 2026-03-29 02:30 does not exist in Europe/Vienna (clocks jump 02:00 → 03:00).
+        String csv = """
+                Project,Client,Description,Task,Tags,Billable,Start Date,Start Time,End Date,End Time
+                ClkDst Project,ClkDst Client,gap,,,Yes,2026-03-29,02:30:00,2026-03-29,04:00:00
+                """;
+
+        ImportResult result = importService.importCsv(csv);
+
+        assertThat(result.importedEntries()).isZero();
+        assertThat(result.warnings()).singleElement().asString().contains("daylight saving gap");
     }
 
     @Test

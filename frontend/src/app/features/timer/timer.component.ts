@@ -173,7 +173,7 @@ interface EntryGroup {
                         <button class="btn btn-ghost btn-sm" (click)="duplicate(g.entries[0])" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
                         <button class="btn btn-ghost btn-sm" (click)="openSplit(g.entries[0])" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
                         <button class="btn btn-ghost btn-sm" (click)="edit(g.entries[0])" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
-                        <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen">🗑</button>
+                        <button class="btn btn-ghost btn-sm" (click)="remove(g.entries[0])" title="Löschen" aria-label="Löschen">🗑</button>
                       } @else {
                         <span class="faint" title="Monat ist abgeschlossen"><svg lucideLock [size]="14"></svg></span>
                       }
@@ -212,7 +212,7 @@ interface EntryGroup {
                           <button class="btn btn-ghost btn-sm" (click)="duplicate(e)" title="Duplizieren" aria-label="Duplizieren"><svg lucideCopy></svg></button>
                           <button class="btn btn-ghost btn-sm" (click)="openSplit(e)" title="Aufteilen" aria-label="Aufteilen"><svg lucideSplit></svg></button>
                           <button class="btn btn-ghost btn-sm" (click)="edit(e)" title="Bearbeiten" aria-label="Bearbeiten"><svg lucidePencil></svg></button>
-                          <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen">🗑</button>
+                          <button class="btn btn-ghost btn-sm" (click)="remove(e)" title="Löschen" aria-label="Löschen">🗑</button>
                         } @else {
                           <span class="faint" title="Monat ist abgeschlossen"><svg lucideLock [size]="14"></svg></span>
                         }
@@ -266,7 +266,7 @@ interface EntryGroup {
                 <label>Projekt *</label>
                 <select class="select" [(ngModel)]="form.projectId" (ngModelChange)="onProjectChange()">
                   <option [ngValue]="null" disabled>wählen…</option>
-                  @for (p of projects(); track p.id) { <option [ngValue]="p.id">{{ p.name }}</option> }
+                  @for (p of projectOptions(); track p.id) { <option [ngValue]="p.id">{{ p.name }}</option> }
                 </select>
               </div>
               <div class="field">
@@ -332,7 +332,10 @@ export class TimerComponent {
   private readonly dialog = inject(DialogService);
   private readonly route = inject(ActivatedRoute);
 
-  protected readonly todayIso = today();
+  /** Evaluated on use so it does not go stale after midnight. */
+  protected get todayIso(): string {
+    return today();
+  }
   protected readonly viewDate = signal(today());
   private readonly lockState = inject(MonthLockStateService);
   /** Entries of a closed month are read-only; only "Fortsetzen" (creates today's entry) stays available. */
@@ -343,13 +346,22 @@ export class TimerComponent {
   protected readonly viewDateLabel = computed(() => {
     const iso = this.viewDate();
     if (iso === this.todayIso) return 'Heute';
-    const yesterday = toIsoDate(addDays(new Date(this.todayIso), -1));
+    const yesterday = toIsoDate(addDays(new Date(this.todayIso + 'T12:00:00'), -1));
     if (iso === yesterday) return 'Gestern';
     return new Date(iso + 'T12:00:00').toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' });
   });
 
   protected readonly entries = signal<TimeEntry[]>([]);
   protected readonly projects = signal<Project[]>([]);
+  /** Entry being edited, as a signal so the select can include its (possibly inactive) project. */
+  private readonly editingProject = signal<{ id: string; name: string } | null>(null);
+  /** Active projects; the edited entry's own project is added (marked) if it is no longer active. */
+  protected readonly projectOptions = computed(() => {
+    const opts = this.projects().map((p) => ({ id: p.id, name: p.name }));
+    const cur = this.editingProject();
+    if (cur && !opts.some((o) => o.id === cur.id)) opts.push({ id: cur.id, name: `${cur.name} (archiviert)` });
+    return opts;
+  });
   protected readonly tasks = signal<Task[]>([]);
   protected readonly allTags = signal<Tag[]>([]);
   protected readonly recent = signal<RecentCombination[]>([]);
@@ -553,6 +565,7 @@ export class TimerComponent {
     this.form = this.empty();
     this.editingId = null;
     this.editingEntry = null;
+    this.editingProject.set(null);
     this.date = this.viewDate();
     this.startTime = '09:00';
     this.endTime = '10:00';
@@ -572,6 +585,7 @@ export class TimerComponent {
     };
     this.editingId = e.id;
     this.editingEntry = e;
+    this.editingProject.set({ id: e.projectId, name: e.projectName });
     // The dialog date is the start day (entryDate is the end day for entries over midnight).
     this.date = toIsoDate(new Date(e.startTime));
     this.startTime = timeOf(e.startTime);

@@ -40,7 +40,7 @@
 | 28 | MEDIUM | `frontend/…/core/layout/timer-bar.component.ts:148` | Timer bar loads projects and tags once and stays stale until reload | Claude (low), Codex | FIXED |
 | 29 | MEDIUM | `frontend/…/core/layout/global-search.component.ts:207` | A search hit navigates to `/timer?date=…`, but the timer page ignores `date` | Claude, Codex (low) | FIXED |
 | 30 | MEDIUM | `frontend/…/timesheet/timesheet.component.ts:338` | All cell inputs are disabled while a save runs, which breaks Tab-driven entry | Claude | FIXED |
-| 31 | LOW | see list | 35 further low-severity findings (validation, races, a11y, edge cases) | Claude, Codex | mostly PLAUSIBLE |
+| 31 | LOW | see list | 35 further low-severity findings (validation, races, a11y, edge cases) | Claude, Codex | FIXED (2 documented, 1 WONTFIX) |
 
 ---
 
@@ -437,48 +437,48 @@ Projects and tags load once when the app shell creates the timer bar.
 
 Backend (`src/main/java/com/ch3xy/dash/…`):
 
-| Location | Finding | Found by |
-|---|---|---|
-| `report/ReportQueryRepository.java:44,73,101,267` | With `rounded=true`, durations are rounded but revenue still sums the raw `amount_snapshot`, so hours × rate ≠ revenue. This may be intended; decide and document it in business-rules. | Claude |
-| `timeentry/TimeEntryService.java:323-330` (`computeAmount`) | Hours are rounded to 10 decimals before the multiplication, so exact half-cent results round down: 120 s at €10.65/h gives €0.35 instead of €0.36. Compute `seconds × rate / 3600` and round once. CONFIRMED. | Codex |
-| `closing/MonthLockService.java:64,80` | `requireOpen()` and locking a month are not synchronised. An update that passed the check can commit after the month was closed in another tab. | Codex |
-| `timeentry/TimeEntryService.java:208` (`deleteByCriteria`) | The lock check and count check are separate from the DELETE, which re-evaluates the criteria, so an entry committed in between (e.g. by an import) is deleted although `expectedCount` did not include it. | Claude, Codex |
-| `timesheet/TimesheetService.java:79` | Setting a cell reads the current total and appends the difference with no lock; two tabs setting the same empty cell to 1 h produce 2 h. | Codex |
-| `dataio/BackupService.java:54` | The export runs several queries without a read-only repeatable-read transaction, so a concurrent change can produce a backup with an entry whose project is missing, which then fails to restore. | Codex |
-| `dataio/ClockifyRowImporter.java:107-119,149-171` | Client and tag lookups exclude archived records, so the import creates active duplicates of archived names, and re-importing the same CSV after archiving its client imports every entry again (duplicate detection depends on the resolved project). | Claude, Codex |
-| `dataio/ClockifyRowImporter.java:91-97` | Counters are incremented inside the row transaction and not rolled back, so the summary over-reports created objects. | Claude |
-| `dataio/ClockifyRowImporter.java:173-183` | `atZone` silently shifts times in the DST gap or overlap. | Claude |
-| `project/ProjectRepository.java:22`, `ProjectService.java` (`checkNameUnique`), V2 `ux_project_name_per_client` | Project names are not unique when `client_id` is NULL: the query compares `client_id = NULL`, and the index treats NULLs as distinct. | Claude, Codex |
-| `project/ProjectService.java:79-109` | `getBudgetStatus` uses `LocalDate.now(zone)` instead of `Clock`, and future-dated entries count against the current period. | Claude |
-| `timeentry/TimeEntryService.java` (`apply`) | No maximum duration; `(int) durationSeconds` can overflow on typo years. | Claude |
-| `report/ReportService.java:132`, `ForecastService.java:200`, heatmap | Unbounded per-day loops for huge ranges; a huge `year` throws and returns 500. | Claude |
-| `timeentry/TimeEntryService.java` (`recentCombinations`, `q`) | A negative `limit` returns 500, and `%`/`_` in the search are not escaped. | Claude |
-| `report/CsvExportService.java:35` | Commas instead of the documented semicolons, times without dates, and no protection against formula injection (`=…`). | Claude |
-| `timer/TimerController.java:50` / `TimerStopRequest` | The docs mention an optional custom end time on stop, but it is not implemented. | Claude |
-| `settings/AppSettingsService.java` | Changing the time zone does not recompute `entry_date` of existing entries (document it). | Claude |
+| Location | Finding | Found by | Status |
+|---|---|---|---|
+| `report/ReportQueryRepository.java:44,73,101,267` | With `rounded=true`, durations are rounded but revenue still sums the raw `amount_snapshot`, so hours × rate ≠ revenue. This may be intended; decide and document it in business-rules. | Claude | DOCUMENTED (revenue stays raw snapshot, business-rules §4) |
+| `timeentry/TimeEntryService.java:323-330` (`computeAmount`) | Hours are rounded to 10 decimals before the multiplication, so exact half-cent results round down: 120 s at €10.65/h gives €0.35 instead of €0.36. Compute `seconds × rate / 3600` and round once. CONFIRMED. | Codex | FIXED |
+| `closing/MonthLockService.java:64,80` | `requireOpen()` and locking a month are not synchronised. An update that passed the check can commit after the month was closed in another tab. | Codex | FIXED (advisory lock) |
+| `timeentry/TimeEntryService.java:208` (`deleteByCriteria`) | The lock check and count check are separate from the DELETE, which re-evaluates the criteria, so an entry committed in between (e.g. by an import) is deleted although `expectedCount` did not include it. | Claude, Codex | FIXED (FOR UPDATE + delete by id) |
+| `timesheet/TimesheetService.java:79` | Setting a cell reads the current total and appends the difference with no lock; two tabs setting the same empty cell to 1 h produce 2 h. | Codex | FIXED (advisory lock per day) |
+| `dataio/BackupService.java:54` | The export runs several queries without a read-only repeatable-read transaction, so a concurrent change can produce a backup with an entry whose project is missing, which then fails to restore. | Codex | FIXED |
+| `dataio/ClockifyRowImporter.java:107-119,149-171` | Client and tag lookups exclude archived records, so the import creates active duplicates of archived names, and re-importing the same CSV after archiving its client imports every entry again (duplicate detection depends on the resolved project). | Claude, Codex | FIXED |
+| `dataio/ClockifyRowImporter.java:91-97` | Counters are incremented inside the row transaction and not rolled back, so the summary over-reports created objects. | Claude | FIXED |
+| `dataio/ClockifyRowImporter.java:173-183` | `atZone` silently shifts times in the DST gap or overlap. | Claude | FIXED (gap rejected, overlap = earlier offset) |
+| `project/ProjectRepository.java:22`, `ProjectService.java` (`checkNameUnique`), V2 `ux_project_name_per_client` | Project names are not unique when `client_id` is NULL: the query compares `client_id = NULL`, and the index treats NULLs as distinct. | Claude, Codex | FIXED (service check; no DB index) |
+| `project/ProjectService.java:79-109` | `getBudgetStatus` uses `LocalDate.now(zone)` instead of `Clock`, and future-dated entries count against the current period. | Claude | FIXED |
+| `timeentry/TimeEntryService.java` (`apply`) | No maximum duration; `(int) durationSeconds` can overflow on typo years. | Claude | FIXED (max 31 days) |
+| `report/ReportService.java:132`, `ForecastService.java:200`, heatmap | Unbounded per-day loops for huge ranges; a huge `year` throws and returns 500. | Claude | FIXED |
+| `timeentry/TimeEntryService.java` (`recentCombinations`, `q`) | A negative `limit` returns 500, and `%`/`_` in the search are not escaped. | Claude | FIXED |
+| `report/CsvExportService.java:35` | Commas instead of the documented semicolons, times without dates, and no protection against formula injection (`=…`). | Claude | FIXED (formula escape; commas are documented, no change) |
+| `timer/TimerController.java:50` / `TimerStopRequest` | The docs mention an optional custom end time on stop, but it is not implemented. | Claude | FIXED (docs corrected; no custom end time) |
+| `settings/AppSettingsService.java` | Changing the time zone does not recompute `entry_date` of existing entries (document it). | Claude | DOCUMENTED (settings module) |
 
 Frontend (`frontend/src/app/…`):
 
-| Location | Finding | Found by |
-|---|---|---|
-| `shared/utils/date-utils.ts` | All date math uses the browser's time zone, not the app setting. With a browser outside the app zone, entered times map to different instants and "today" can differ from the backend. Acceptable for a single local user; Codex rated it MEDIUM. | Claude, Codex |
-| `features/projects/project-detail.component.ts:260`, `features/reports/reports.component.ts:1193` | Budget colour uses `>= 100` for "danger", while the backend and business rules use `> 100` for EXCEEDED, so exactly 100 % shows red here and "warning" elsewhere. | Codex |
-| `features/reports/reports.component.ts:207` | Overview has no loading or error branch; old numbers stay visible during reload, or the card stays blank on error. | Claude |
-| `features/reports/reports.component.ts:949`, `features/dashboard/dashboard.component.ts:211` | URL params (`from`, `to`, `groupBy`) are not validated. | Claude |
-| `core/keyboard-shortcut.service.ts:50-56` | `s` only stops the timer (the spec says start/stop) and has no `e.repeat` guard. Shortcuts also fire while a dialog is open (`n` resets a half-filled form). | Claude |
-| `core/layout/dialog-host.component.ts:11-30` | Confirm dialog has no `role="dialog"` or `aria-modal`, no initial focus, no Escape handling and no focus trap. | Claude |
-| `core/dialog.service.ts:41-70` | A second confirm overwrites the pending one, so the first promise never resolves. | Claude |
-| `core/month-lock-state.service.ts:45-47` | `anyLocked` checks only the first and last month (latent; only called for weeks today). | Claude |
-| `features/timer/timer.component.ts:333,503`, `features/calendar/calendar.component.ts:347` | `todayIso` is fixed at construction, so it is stale after midnight. | Claude |
-| `features/timer/timer.component.ts:344` | `new Date(todayIso)` is parsed as UTC (wrong day in UTC− zones). | Claude |
-| `features/timer/timer.component.ts` (project select) | Only ACTIVE projects are listed, so editing an entry of an archived project shows an empty select. | Claude |
-| `features/timer/timer.component.ts`, `core/layout/timer-bar.component.ts:58` | Emoji-only buttons have no `aria-label`. | Claude |
-| `features/calendar/calendar.component.ts:651` | Resizing clamps the end of entries that cross midnight. | Claude |
-| `features/calendar/calendar.component.ts:599-619` | Touch listeners are not removed in `ngOnDestroy`. | Claude |
-| `features/calendar/calendar.component.ts` (layout) | Block height comes from `durationSeconds` while position comes from wall-clock time, so they drift on DST days. | Claude |
-| `features/timesheet/timesheet.component.ts:372` | `format()` rounds while `DurationPipe` floors (1-minute mismatch). | Claude |
-| `features/projects/project-detail.component.ts:214` | The default `rateFrom` is the UTC date (yesterday between 00:00 and 02:00 in Vienna). | Claude |
-| `features/projects/project-detail.component.ts:137`, `features/clients/client-detail.component.ts:95` | No error or not-found state; the spinner never stops. | Claude |
+| Location | Finding | Found by | Status |
+|---|---|---|---|
+| `shared/utils/date-utils.ts` | All date math uses the browser's time zone, not the app setting. With a browser outside the app zone, entered times map to different instants and "today" can differ from the backend. Acceptable for a single local user; Codex rated it MEDIUM. | Claude, Codex | WONTFIX (documented; local single user) |
+| `features/projects/project-detail.component.ts:260`, `features/reports/reports.component.ts:1193` | Budget colour uses `>= 100` for "danger", while the backend and business rules use `> 100` for EXCEEDED, so exactly 100 % shows red here and "warning" elsewhere. | Codex | FIXED |
+| `features/reports/reports.component.ts:207` | Overview has no loading or error branch; old numbers stay visible during reload, or the card stays blank on error. | Claude | FIXED |
+| `features/reports/reports.component.ts:949`, `features/dashboard/dashboard.component.ts:211` | URL params (`from`, `to`, `groupBy`) are not validated. | Claude | FIXED |
+| `core/keyboard-shortcut.service.ts:50-56` | `s` only stops the timer (the spec says start/stop) and has no `e.repeat` guard. Shortcuts also fire while a dialog is open (`n` resets a half-filled form). | Claude | FIXED |
+| `core/layout/dialog-host.component.ts:11-30` | Confirm dialog has no `role="dialog"` or `aria-modal`, no initial focus, no Escape handling and no focus trap. | Claude | FIXED |
+| `core/dialog.service.ts:41-70` | A second confirm overwrites the pending one, so the first promise never resolves. | Claude | FIXED |
+| `core/month-lock-state.service.ts:45-47` | `anyLocked` checks only the first and last month (latent; only called for weeks today). | Claude | FIXED |
+| `features/timer/timer.component.ts:333,503`, `features/calendar/calendar.component.ts:347` | `todayIso` is fixed at construction, so it is stale after midnight. | Claude | FIXED |
+| `features/timer/timer.component.ts:344` | `new Date(todayIso)` is parsed as UTC (wrong day in UTC− zones). | Claude | FIXED |
+| `features/timer/timer.component.ts` (project select) | Only ACTIVE projects are listed, so editing an entry of an archived project shows an empty select. | Claude | FIXED |
+| `features/timer/timer.component.ts`, `core/layout/timer-bar.component.ts:58` | Emoji-only buttons have no `aria-label`. | Claude | FIXED |
+| `features/calendar/calendar.component.ts:651` | Resizing clamps the end of entries that cross midnight. | Claude | FIXED |
+| `features/calendar/calendar.component.ts:599-619` | Touch listeners are not removed in `ngOnDestroy`. | Claude | FIXED |
+| `features/calendar/calendar.component.ts` (layout) | Block height comes from `durationSeconds` while position comes from wall-clock time, so they drift on DST days. | Claude | FIXED |
+| `features/timesheet/timesheet.component.ts:372` | `format()` rounds while `DurationPipe` floors (1-minute mismatch). | Claude | FIXED |
+| `features/projects/project-detail.component.ts:214` | The default `rateFrom` is the UTC date (yesterday between 00:00 and 02:00 in Vienna). | Claude | FIXED |
+| `features/projects/project-detail.component.ts:137`, `features/clients/client-detail.component.ts:95` | No error or not-found state; the spinner never stops. | Claude | FIXED |
 
 ---
 

@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ExtendedReportIntegrationTest extends AbstractIntegrationTest {
 
@@ -34,6 +35,17 @@ class ExtendedReportIntegrationTest extends AbstractIntegrationTest {
     void resetRounding() {
         settingsService.update(new AppSettingsRequest(
                 "Europe/Vienna", "EUR", new BigDecimal("0.00"), "NONE", 15));
+    }
+
+    @Test
+    void perDayReportsRejectUnboundedRanges() {
+        ReportFilter huge = new ReportFilter(LocalDate.of(2000, 1, 1), LocalDate.of(2999, 12, 31),
+                null, null, null, null, null, null, GroupBy.PROJECT);
+
+        assertThatThrownBy(() -> reportService.getDailyBreakdown(huge, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> reportService.getHeatmap(1_000_000_000))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

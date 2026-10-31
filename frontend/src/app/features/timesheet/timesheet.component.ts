@@ -382,7 +382,7 @@ export class TimesheetComponent {
     if (!seconds) {
       return '';
     }
-    const m = Math.round(seconds / 60);
+    const m = Math.floor(seconds / 60); // floor, like DurationPipe
     return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
   }
 }
