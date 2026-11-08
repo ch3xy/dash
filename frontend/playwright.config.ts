@@ -1,21 +1,21 @@
 import { defineConfig } from '@playwright/test';
 
-/**
- * E2E config. Assumes the full stack is already running:
- *   - backend on :8080 (./mvnw spring-boot:run, Postgres via docker compose)
- *   - frontend dev server on :4200 (npm start)
- * Uses the locally installed Google Chrome (channel) to avoid downloading browsers.
- */
+// Start the full stack first; see e2e/README.md. Never target a production database.
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   expect: { timeout: 7_000 },
   fullyParallel: false,
-  reporter: [['list']],
+  workers: 1, // The application has a single global timer and settings record.
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:4200',
-    channel: 'chrome',
+    baseURL: process.env['E2E_BASE_URL'] ?? 'http://localhost:4200',
+    ...(process.env['PW_CHROMIUM_EXECUTABLE']
+      ? { launchOptions: { executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] } }
+      : { channel: 'chrome' }),
+    timezoneId: 'Europe/Vienna',
     headless: true,
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
 });

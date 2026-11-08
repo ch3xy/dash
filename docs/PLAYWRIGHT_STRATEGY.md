@@ -4,24 +4,34 @@ Stand: 08.11.2026. Regeln: [PLAYWRIGHT_RULES.md](PLAYWRIGHT_RULES.md).
 
 ## Iststand und Ausführung
 
-Die erste Bestandsaufnahme fand drei Fälle in `frontend/e2e/app.spec.ts` mit `frontend/playwright.config.ts` und `cd frontend && npm run e2e`. Während der Dokumentation wird diese Suite parallel erweitert (`master-data.spec.ts`, `data-closing.spec.ts`, gemeinsame Helfer). Der aktuelle Quellcode ist maßgeblich; diese Dokumentation ist kein Prüfbericht dieses parallelen Ausbaus.
+Die Suite in `frontend/e2e/` wurde von drei auf 33 Fälle erweitert.
+Ausführung: `cd frontend && npm run e2e:typecheck && npm run e2e`.
+Startbedingungen, Umgebungsvariablen, Daten-Lifecycle und offene Lücken:
+[E2E-Dokumentation](../frontend/e2e/README.md).
 
-Die aktuelle Konfiguration unterstützt `E2E_BASE_URL` und `PW_CHROMIUM_EXECUTABLE`, verwendet Europe/Vienna und einen Worker für globale Timer-/Einstellungszustände. Sie startet keinen eigenen Stack. Deshalb nur gegen eine dedizierte Dash-Testinstanz ausführen, niemals gegen die persönliche Entwicklungsdatenbank. Die konkreten Start-/Datenregeln der Suite vor dem Lauf lesen. Diese Dokumentationsänderung migriert oder startet die vorhandene Suite nicht.
+Die Konfiguration unterstützt `E2E_BASE_URL`, `E2E_API_URL` (API-Helfer) und
+`PW_CHROMIUM_EXECUTABLE`, verwendet Europe/Vienna und einen Worker für globale
+Timer-/Einstellungszustände. Sie startet keinen eigenen Stack. Ausschließlich eine
+dedizierte Testinstanz verwenden. Eigene Fixture-Einträge werden gelöscht,
+Projekte/Tags mangels Lösch-API archiviert, Einstellungen zurückgesetzt und der
+Testmonat freigegeben. Für einen vollständig sauberen Zustand Testdatenbank neu erstellen.
 
-Zielstruktur für einen späteren Ausbau: eigenes `e2e/`-npm-Paket im Dash-Repository, dedizierter PostgreSQL-/Backend-/Frontend-Stack, eigene Testdaten mit Cleanup, explizite Freigabe für Mutationstests und Typecheck. Bestehende Tests vorher auf Isolation und Ergebnisassertionen prüfen.
+## Abdeckungsmatrix
 
-## Ausbauziele nach der ersten Bestandsaufnahme
-
-| Bereich | Iststand / nächster Ausbau |
+| Bereich | Implementiert / verbleibende Lücken |
 |---|---|
-| App-Shell | vorhandener Navigationsfall; Mobilmenü ergänzen |
-| Timer | vorhandener Start-/Stopp-Fall; Konflikt, Fortsetzen, Verwerfen, Reload ergänzen |
-| Reports | vorhandener Fall für gebuchte Zeit; exakte Dauer/Umsatz, Filter und Export ergänzen |
-| Stammdaten | Kunden, Projekte, Tasks, Tags: CRUD, Archivierung und Validierung geplant |
-| Zeit und Raten | manuelle Einträge, Mitternacht, historische Rate, Budget und Rundung geplant |
-| Einstellungen/Fehler | Persistenz, Themes, Sprache, Fehler und Wiederholung geplant |
+| App-Shell | Hauptnavigation, Fallback, Mobilmenü, globale Projektsuche |
+| Timer | Start/Stop, Reload, Beschreibung, Verwerfen; Konflikt/Fortsetzen/Bulk offen |
+| Reports | Projektfilter, Detailansicht, Filterpersistenz, CSV/XLSX; weitere Kombinationen und Pagination offen |
+| Stammdaten | Kunden anlegen/bearbeiten/archivieren/löschen, Projekte anlegen/bearbeiten/Status, Tasks, Tags, Ratenhistorie |
+| Zeiterfassung | Manuelle Einträge, Bearbeiten/Löschen/Aufteilen, Timesheet-Zellen, Kalenderbearbeitung; Drag/Resize/Touch und Mitternacht offen |
+| Daten | Backup-Download, Restore-Abbruch, CSV-Import/Duplikate, bestätigte Datenlöschung; vollständiger Restore offen |
+| Monatsabschluss | Sperren, Bearbeitungssperre, Löschsperre, bestätigte Freigabe, Fehler/Retry |
+| Einstellungen | Speichern/Reload, Theme-Persistenz/Systemfarbschema |
 
-Die Tabelle beschreibt die ursprüngliche Bestandsaufnahme und Ausbauziele. Parallel ergänzte Fälle können Teile davon bereits abdecken; ihren tatsächlichen Stand und Prüfnachweis bei Lieferung in diese Matrix übernehmen. Die Dash-Suite wurde für diese Dokumentationsänderung nicht ausgeführt.
+Die Abläufe verwenden den echten Stack; nur der gezielte Ladefehler wird simuliert.
+Download-Tests prüfen den erfolgreichen Abschluss, nicht sämtliche fachlichen Dateiinhalte.
+Aktuelle Laufergebnisse: [Prüfbericht](../frontend/e2e/VALIDATION.md).
 
 ## Definition of Done und spätere CI
 
