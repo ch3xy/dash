@@ -1126,3 +1126,7 @@ Stand: 2026-06-19
 - Clockify Features: https://clockify.me/features/
 - Clockify Rates: https://clockify.me/features/rates
 - Clockify Pricing / Feature Matrix: https://clockify.me/pricing
+
+## Playwright regression rules
+
+See [docs/PLAYWRIGHT_RULES.md](docs/PLAYWRIGHT_RULES.md) and [docs/PLAYWRIGHT_STRATEGY.md](docs/PLAYWRIGHT_STRATEGY.md). These define regression coverage for visible changes, isolated test data, actual validation reporting and future opt-in CI.

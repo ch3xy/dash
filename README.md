@@ -84,3 +84,7 @@ Auf arrow-pi läuft dash als Docker-Container neben velo, PostgreSQL und Caddy (
 Deploy-Skripte im Repo `pi-ops`). Jeder Deploy ist ein Release: alles committen, `./mvnw verify`, dann
 `scripts/deploy.sh`. Regeln und Ablauf gelten für alle Arrow-Apps und stehen zentral in
 `../pi-ops/docs/deploy-conventions.md`.
+
+## Playwright regression
+
+Rules and current coverage/planned expansion: [suite rules](docs/PLAYWRIGHT_RULES.md), [strategy](docs/PLAYWRIGHT_STRATEGY.md). Tests belong with the application. Playwright is currently a separate check outside the normal build; see the strategy for the actual setup status and future CI.
