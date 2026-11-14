@@ -17,7 +17,7 @@
     <properties>
         <java.version>25</java.version>
         <mapstruct.version>1.6.3</mapstruct.version>
-        <testcontainers.version>1.21.1</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
         <frontend-maven-plugin.version>1.15.1</frontend-maven-plugin.version>
         <node.version>v26.3.1</node.version>
         <npm.version>10.9.8</npm.version>
