@@ -1,0 +1,52 @@
+name: CI
+# Test and build only; no deploy. Releases and deploys stay local (scripts/deploy.sh).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      # frontend-maven-plugin installs Node itself; only the npm download cache is shared between runs
+      - uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      # Same build as a release (scripts/deploy.sh), but with tests: backend tests incl. Testcontainers
+      # (Docker is available on the runner) and the production Angular build inside the jar
+      - name: Maven verify
+        run: ./mvnw -B -ntp -Pprod verify
+      # Same major version as node.version in pom.xml
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      # node_modules come from the Maven step (npm ci); Vitest via @angular/build:unit-test, no browser
+      - name: Frontend unit tests
+        working-directory: frontend
+        run: npx ng test --watch=false
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dash-jar
+          path: target/dash.jar
+          retention-days: 7
